@@ -6,8 +6,8 @@ import { cn } from "@/lib/utils";
 const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 export const metadata: Metadata = {
-  title: "RiskMap",
-  description: "Repository knowledge-concentration risk analysis.",
+  title: "Single Point",
+  description: "Find knowledge-concentration risk in your codebase.",
 };
 
 export default function RootLayout({
