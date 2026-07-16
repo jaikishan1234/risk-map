@@ -41,3 +41,20 @@ export interface FileClassificationResult {
   files: ClassifiedFile[];
   stats: FileClassificationStats;
 }
+
+/**
+ * Ownership breakdown derived from a set of commits. Works on any commit
+ * list — the full repository history, or (once per-file commit data
+ * exists) a single file's history — since ownership concentration is the
+ * same computation either way.
+ */
+export interface OwnershipAnalysis {
+  /** Author with the most commits in the given set, or null if empty. */
+  primaryOwner: string | null;
+  /** Primary owner's share of total commits, 0–100. 0 if no commits. */
+  ownershipPercentage: number;
+  totalCommits: number;
+  contributorCount: number;
+  /** Full breakdown, sorted by commitCount descending. */
+  contributors: ContributorCommitStats[];
+}
