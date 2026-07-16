@@ -1,9 +1,43 @@
-import { ArrowRight, Braces, GitBranch, GitFork, ShieldAlert } from "lucide-react";
+"use client";
+
+import { useForm } from "react-hook-form";
+import {
+  ArrowRight,
+  Braces,
+  CircleAlert,
+  GitBranch,
+  GitFork,
+  ShieldAlert,
+  Star,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  analyzeRequestSchema,
+  type AnalyzeRequest,
+} from "@/lib/validation/analyze-request.schema";
+import { useRepositoryAnalysis } from "@/hooks/useRepositoryAnalysis";
+import { formatCompactNumber, formatRelativeDate } from "@/utils/format";
 
 export default function Home() {
+  const { state, analyze } = useRepositoryAnalysis();
+  const isLoading = state.status === "loading";
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<AnalyzeRequest>({
+    mode: "onSubmit",
+    reValidateMode: "onChange",
+    defaultValues: { repositoryUrl: "" },
+  });
+
+  const onSubmit = handleSubmit((data) => {
+    analyze(data.repositoryUrl);
+  });
+
   return (
     <main className="relative min-h-screen overflow-hidden bg-background text-foreground">
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,color-mix(in_oklch,var(--border),transparent_55%)_1px,transparent_1px),linear-gradient(to_bottom,color-mix(in_oklch,var(--border),transparent_55%)_1px,transparent_1px)] bg-[size:4rem_4rem]" />
@@ -41,7 +75,11 @@ export default function Home() {
               single-owner files, and the work most exposed to handoff risk.
             </p>
 
-            <div className="mt-10 max-w-2xl rounded-2xl border border-border bg-background/80 p-3 shadow-2xl shadow-primary/5 backdrop-blur">
+            <form
+              onSubmit={onSubmit}
+              noValidate
+              className="mt-10 max-w-2xl rounded-2xl border border-border bg-background/80 p-3 shadow-2xl shadow-primary/5 backdrop-blur"
+            >
               <label className="sr-only" htmlFor="repository-url">
                 GitHub repository URL
               </label>
@@ -53,20 +91,55 @@ export default function Home() {
                   />
                   <Input
                     id="repository-url"
-                    type="url"
+                    type="text"
+                    inputMode="url"
+                    autoComplete="off"
+                    spellCheck={false}
                     placeholder="https://github.com/owner/repository"
-                    className="h-12 border-border bg-muted/40 pl-10 text-sm shadow-none"
+                    aria-invalid={errors.repositoryUrl ? "true" : "false"}
+                    aria-describedby={
+                      errors.repositoryUrl ? "repository-url-error" : undefined
+                    }
+                    className={[
+                      "h-12 border-border bg-muted/40 pl-10 text-sm shadow-none",
+                      errors.repositoryUrl && "border-destructive focus-visible:ring-destructive/30",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                    {...register("repositoryUrl", {
+                      validate: (value) => {
+                        const result =
+                          analyzeRequestSchema.shape.repositoryUrl.safeParse(value);
+                        return result.success || result.error.issues[0].message;
+                      },
+                    })}
                   />
                 </div>
-                <Button type="button" size="lg" className="h-12 px-5">
-                  Analyze repository
-                  <ArrowRight className="size-4" aria-hidden="true" />
+                <Button
+                  type="submit"
+                  size="lg"
+                  className="h-12 px-5"
+                  disabled={isLoading}
+                >
+                  {isLoading ? "Analyzing…" : "Analyze repository"}
+                  {!isLoading && <ArrowRight className="size-4" aria-hidden="true" />}
                 </Button>
               </div>
-              <p className="px-1 pt-3 font-mono text-xs text-muted-foreground">
-                Public GitHub repositories · deterministic analysis · no OAuth required
-              </p>
-            </div>
+
+              {errors.repositoryUrl ? (
+                <p
+                  id="repository-url-error"
+                  role="alert"
+                  className="px-1 pt-3 font-mono text-xs text-destructive"
+                >
+                  {errors.repositoryUrl.message}
+                </p>
+              ) : (
+                <p className="px-1 pt-3 font-mono text-xs text-muted-foreground">
+                  Public GitHub repositories · deterministic analysis · no OAuth required
+                </p>
+              )}
+            </form>
 
             <div className="mt-10 flex flex-wrap gap-x-7 gap-y-3 text-sm text-muted-foreground">
               <span className="flex items-center gap-2">
@@ -92,36 +165,16 @@ export default function Home() {
                   </span>
                   analysis / repository
                 </div>
-                <span className="rounded-full bg-destructive/10 px-2 py-1 font-mono text-[10px] font-medium text-destructive">
-                  4 CRITICAL
-                </span>
+                <StatusBadge state={state} />
               </div>
 
-              <div className="space-y-5 p-5">
-                <div className="flex items-end justify-between">
-                  <div>
-                    <p className="font-mono text-xs text-muted-foreground">knowledge concentration</p>
-                    <p className="mt-1 text-4xl font-semibold tracking-tight">
-                      78<span className="text-lg text-muted-foreground">/100</span>
-                    </p>
-                  </div>
-                  <div className="rounded-lg border border-border bg-muted/50 px-3 py-2 text-right">
-                    <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">risk tier</p>
-                    <p className="text-sm font-semibold text-destructive">HIGH</p>
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <RiskRow file="src/payments/processor.ts" owner="alexchen" score={96} width="96%" tone="bg-destructive" />
-                  <RiskRow file="src/auth/session.ts" owner="mira" score={82} width="82%" tone="bg-amber-500" />
-                  <RiskRow file="src/queue/worker.ts" owner="alexchen" score={74} width="74%" tone="bg-amber-500" />
-                  <RiskRow file="src/config/runtime.ts" owner="4 contributors" score={31} width="31%" tone="bg-emerald-500" />
-                </div>
-
-                <div className="rounded-xl border border-border bg-muted/40 p-3 font-mono text-xs text-muted-foreground">
-                  <span className="text-primary">→</span> Prioritize a pairing session for{" "}
-                  <span className="text-foreground">processor.ts</span>
-                </div>
+              <div className="p-5">
+                {state.status === "idle" && <IdlePreview />}
+                {state.status === "loading" && <LoadingPreview />}
+                {state.status === "error" && <ErrorPreview message={state.message} />}
+                {state.status === "success" && (
+                  <RepositoryPreview repository={state.repository} />
+                )}
               </div>
             </div>
           </div>
@@ -131,29 +184,144 @@ export default function Home() {
   );
 }
 
-function RiskRow({
-  file,
-  owner,
-  score,
-  tone,
-  width,
+function StatusBadge({
+  state,
 }: {
-  file: string;
-  owner: string;
-  score: number;
-  tone: string;
-  width: string;
+  state: ReturnType<typeof useRepositoryAnalysis>["state"];
+}) {
+  if (state.status === "loading") {
+    return (
+      <span className="rounded-full bg-primary/10 px-2 py-1 font-mono text-[10px] font-medium text-primary">
+        ANALYZING
+      </span>
+    );
+  }
+  if (state.status === "error") {
+    return (
+      <span className="rounded-full bg-destructive/10 px-2 py-1 font-mono text-[10px] font-medium text-destructive">
+        ERROR
+      </span>
+    );
+  }
+  if (state.status === "success") {
+    return (
+      <span className="rounded-full bg-emerald-500/10 px-2 py-1 font-mono text-[10px] font-medium text-emerald-600">
+        METADATA LOADED
+      </span>
+    );
+  }
+  return (
+    <span className="rounded-full bg-muted px-2 py-1 font-mono text-[10px] font-medium text-muted-foreground">
+      AWAITING INPUT
+    </span>
+  );
+}
+
+function IdlePreview() {
+  return (
+    <div className="flex flex-col items-center justify-center gap-3 py-10 text-center">
+      <GitFork className="size-8 text-muted-foreground" aria-hidden="true" />
+      <p className="max-w-xs font-mono text-xs text-muted-foreground">
+        Paste a public GitHub repository URL to pull its metadata here.
+      </p>
+    </div>
+  );
+}
+
+function LoadingPreview() {
+  return (
+    <div className="space-y-5" aria-live="polite" aria-busy="true">
+      <div className="flex items-end justify-between">
+        <div className="space-y-2">
+          <div className="h-3 w-28 animate-pulse rounded bg-muted" />
+          <div className="h-8 w-20 animate-pulse rounded bg-muted" />
+        </div>
+        <div className="h-10 w-20 animate-pulse rounded-lg bg-muted" />
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="h-16 animate-pulse rounded-xl bg-muted" />
+        ))}
+      </div>
+      <span className="sr-only">Analyzing repository…</span>
+    </div>
+  );
+}
+
+function ErrorPreview({ message }: { message: string }) {
+  return (
+    <div
+      role="alert"
+      className="flex flex-col items-center gap-3 py-8 text-center"
+    >
+      <CircleAlert className="size-8 text-destructive" aria-hidden="true" />
+      <p className="max-w-xs font-mono text-xs text-destructive">{message}</p>
+    </div>
+  );
+}
+
+function RepositoryPreview({
+  repository,
+}: {
+  repository: import("@/types/repository.types").RepositoryMetadata;
+}) {
+  return (
+    <div className="space-y-5">
+      <div>
+        <p className="font-mono text-xs text-muted-foreground">{repository.name}</p>
+        {repository.description && (
+          <p className="mt-1.5 line-clamp-2 text-sm text-foreground">
+            {repository.description}
+          </p>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <StatBox
+          icon={<Star className="size-3.5" aria-hidden="true" />}
+          label="stars"
+          value={formatCompactNumber(repository.stars)}
+        />
+        <StatBox
+          icon={<GitFork className="size-3.5" aria-hidden="true" />}
+          label="forks"
+          value={formatCompactNumber(repository.forks)}
+        />
+        <StatBox
+          icon={<Braces className="size-3.5" aria-hidden="true" />}
+          label="language"
+          value={repository.language ?? "—"}
+        />
+        <StatBox
+          icon={<GitBranch className="size-3.5" aria-hidden="true" />}
+          label="updated"
+          value={formatRelativeDate(repository.lastUpdated)}
+        />
+      </div>
+
+      <div className="rounded-xl border border-border bg-muted/40 p-3 font-mono text-xs text-muted-foreground">
+        <span className="text-primary">→</span> Ownership risk scoring isn&apos;t wired up yet — this panel currently shows raw repository metadata only.
+      </div>
+    </div>
+  );
+}
+
+function StatBox({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
 }) {
   return (
     <div className="rounded-xl border border-border/80 p-3">
-      <div className="flex items-center justify-between gap-3 font-mono text-xs">
-        <span className="truncate text-foreground">{file}</span>
-        <span className="shrink-0 font-semibold">{score}</span>
+      <div className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+        {icon}
+        {label}
       </div>
-      <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-muted">
-        <div className={["h-full rounded-full", tone].join(" ")} style={{ width }} />
-      </div>
-      <p className="mt-2 font-mono text-[10px] text-muted-foreground">top owner: {owner}</p>
+      <p className="mt-1.5 truncate text-sm font-semibold text-foreground">{value}</p>
     </div>
   );
 }
