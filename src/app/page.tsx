@@ -19,6 +19,7 @@ import {
 } from "@/lib/validation/analyze-request.schema";
 import { useRepositoryAnalysis } from "@/hooks/useRepositoryAnalysis";
 import { formatCompactNumber, formatRelativeDate } from "@/utils/format";
+import { ContributorsCard } from "@/components/repository/ContributorsCard";
 
 export default function Home() {
   const { state, analyze } = useRepositoryAnalysis();
@@ -179,6 +180,12 @@ export default function Home() {
             </div>
           </div>
         </section>
+
+        {state.status === "success" && (
+          <section className="pb-16">
+            <ContributorsCard contributors={state.contributors} />
+          </section>
+        )}
       </div>
     </main>
   );

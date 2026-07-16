@@ -1,16 +1,25 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import type { RepositoryMetadata } from "@/types/repository.types";
+import type { Contributor, RepositoryMetadata } from "@/types/repository.types";
 
 export type RepositoryAnalysisState =
   | { status: "idle" }
   | { status: "loading" }
-  | { status: "success"; repository: RepositoryMetadata }
+  | {
+      status: "success";
+      repository: RepositoryMetadata;
+      contributors: Contributor[];
+    }
   | { status: "error"; message: string };
 
-interface RepositoryApiResponse {
+interface RepositoryResponseBody {
   repository?: RepositoryMetadata;
+  error?: string;
+}
+
+interface ContributorsResponseBody {
+  contributors?: Contributor[];
   error?: string;
 }
 
@@ -23,23 +32,52 @@ export function useRepositoryAnalysis() {
     setState({ status: "loading" });
 
     try {
-      const response = await fetch("/api/repository", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ repositoryUrl }),
-      });
+      // Fetch repository metadata and contributors in parallel — they're
+      // independent GitHub API calls, no reason to wait on one for the other.
+      const [repositoryResponse, contributorsResponse] = await Promise.all([
+        fetch("/api/repository", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ repositoryUrl }),
+        }),
+        fetch("/api/contributors", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ repositoryUrl }),
+        }),
+      ]);
 
-      const body: RepositoryApiResponse = await response.json();
+      const repositoryBody: RepositoryResponseBody = await repositoryResponse.json();
+      const contributorsBody: ContributorsResponseBody =
+        await contributorsResponse.json();
 
-      if (!response.ok || !body.repository) {
+      // Surface whichever call failed first. If the repo itself is
+      // invalid/not found, that error is almost always the more useful one
+      // to show, so check it first.
+      if (!repositoryResponse.ok || !repositoryBody.repository) {
         setState({
           status: "error",
-          message: body.error ?? "Something went wrong. Please try again.",
+          message:
+            repositoryBody.error ?? "Something went wrong. Please try again.",
         });
         return;
       }
 
-      setState({ status: "success", repository: body.repository });
+      if (!contributorsResponse.ok || !contributorsBody.contributors) {
+        setState({
+          status: "error",
+          message:
+            contributorsBody.error ??
+            "Fetched repository info, but couldn't load contributors.",
+        });
+        return;
+      }
+
+      setState({
+        status: "success",
+        repository: repositoryBody.repository,
+        contributors: contributorsBody.contributors,
+      });
     } catch {
       setState({
         status: "error",
