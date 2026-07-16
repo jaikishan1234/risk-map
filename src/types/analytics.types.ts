@@ -58,3 +58,22 @@ export interface OwnershipAnalysis {
   /** Full breakdown, sorted by commitCount descending. */
   contributors: ContributorCommitStats[];
 }
+
+export type RiskLevel = "critical" | "high" | "medium" | "low" | "unknown";
+
+/**
+ * Result of a bus factor calculation:
+ * "the minimum number of contributors responsible for 50% of commits."
+ * Smaller busFactor = higher concentration risk.
+ */
+export interface BusFactorResult {
+  busFactor: number;
+  riskLevel: RiskLevel;
+  /** Deterministic, data-grounded description of the result — not AI-generated. */
+  explanation: string;
+  /** Usernames of the contributors counted toward busFactor, in order. */
+  topContributors: string[];
+  /** Actual cumulative percentage reached (>= 50, unless there are no commits). */
+  cumulativePercentage: number;
+  totalCommits: number;
+}
