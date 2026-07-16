@@ -4,10 +4,17 @@ import type {
   Contributor,
   RepositoryMetadata,
 } from "@/types/repository.types";
+import { getOrFetch, MemoryCache } from "@/lib/cache/memory-cache";
 
 const MAX_CONTRIBUTORS = 20;
 const MAX_COMMITS = 1000;
 const COMMITS_PER_PAGE = 100;
+
+// GitHub data doesn't change second-to-second; cache each result type for
+// 5 minutes so re-analyzing the same repo within a session doesn't re-spend
+// API rate limit. Separate caches per method since they have different
+// shapes and are fetched independently.
+const CACHE_TTL_MS = 5 * 60 * 1000;
 
 /**
  * Thrown for any failure talking to the GitHub API.
@@ -35,6 +42,16 @@ function getErrorStatus(error: unknown): number | undefined {
 export class GitHubService {
   private readonly octokit: Octokit;
 
+  // Keyed by "owner/repo". One cache + in-flight map per method.
+  private readonly repositoryCache = new MemoryCache<RepositoryMetadata>(CACHE_TTL_MS);
+  private readonly repositoryInFlight = new Map<string, Promise<RepositoryMetadata>>();
+
+  private readonly contributorsCache = new MemoryCache<Contributor[]>(CACHE_TTL_MS);
+  private readonly contributorsInFlight = new Map<string, Promise<Contributor[]>>();
+
+  private readonly commitsCache = new MemoryCache<Commit[]>(CACHE_TTL_MS);
+  private readonly commitsInFlight = new Map<string, Promise<Commit[]>>();
+
   constructor(authToken?: string) {
     this.octokit = new Octokit({
       auth: authToken ?? process.env.GITHUB_TOKEN,
@@ -42,12 +59,22 @@ export class GitHubService {
   }
 
   /**
-   * Fetches core repository metadata.
+   * Fetches core repository metadata. Cached per "owner/repo" for 5 minutes.
    *
    * @param owner - repository owner/org, e.g. "facebook"
    * @param repo  - repository name, e.g. "react"
    */
   async getRepository(
+    owner: string,
+    repo: string
+  ): Promise<RepositoryMetadata> {
+    const key = `${owner}/${repo}`;
+    return getOrFetch(this.repositoryCache, this.repositoryInFlight, key, () =>
+      this.fetchRepository(owner, repo)
+    );
+  }
+
+  private async fetchRepository(
     owner: string,
     repo: string
   ): Promise<RepositoryMetadata> {
@@ -86,13 +113,27 @@ export class GitHubService {
   }
 
   /**
-   * Fetches the top contributors by commit count.
+   * Fetches the top contributors by commit count. Cached per "owner/repo"
+   * for 5 minutes.
    *
    * @param owner - repository owner/org, e.g. "facebook"
    * @param repo  - repository name, e.g. "react"
    * @returns up to MAX_CONTRIBUTORS contributors, sorted by commitCount desc.
    */
   async getContributors(owner: string, repo: string): Promise<Contributor[]> {
+    const key = `${owner}/${repo}`;
+    return getOrFetch(
+      this.contributorsCache,
+      this.contributorsInFlight,
+      key,
+      () => this.fetchContributors(owner, repo)
+    );
+  }
+
+  private async fetchContributors(
+    owner: string,
+    repo: string
+  ): Promise<Contributor[]> {
     try {
       const { data } = await this.octokit.rest.repos.listContributors({
         owner,
@@ -151,12 +192,20 @@ export class GitHubService {
   /**
    * Fetches the latest commits (default branch), newest first, paginating
    * through the list endpoint until either MAX_COMMITS is reached or the
-   * repository runs out of commits — whichever comes first.
+   * repository runs out of commits — whichever comes first. Cached per
+   * "owner/repo" for 5 minutes.
    *
    * @param owner - repository owner/org, e.g. "facebook"
    * @param repo  - repository name, e.g. "react"
    */
   async getCommits(owner: string, repo: string): Promise<Commit[]> {
+    const key = `${owner}/${repo}`;
+    return getOrFetch(this.commitsCache, this.commitsInFlight, key, () =>
+      this.fetchCommits(owner, repo)
+    );
+  }
+
+  private async fetchCommits(owner: string, repo: string): Promise<Commit[]> {
     try {
       const commits: Commit[] = [];
 
