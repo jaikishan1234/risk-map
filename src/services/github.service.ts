@@ -1,7 +1,13 @@
 import { Octokit } from "octokit";
-import type { Contributor, RepositoryMetadata } from "@/types/repository.types";
+import type {
+  Commit,
+  Contributor,
+  RepositoryMetadata,
+} from "@/types/repository.types";
 
 const MAX_CONTRIBUTORS = 20;
+const MAX_COMMITS = 1000;
+const COMMITS_PER_PAGE = 100;
 
 /**
  * Thrown for any failure talking to the GitHub API.
@@ -137,6 +143,72 @@ export class GitHubService {
 
       throw new GitHubServiceError(
         `Failed to fetch contributors for ${owner}/${repo}.`,
+        500
+      );
+    }
+  }
+
+  /**
+   * Fetches the latest commits (default branch), newest first, paginating
+   * through the list endpoint until either MAX_COMMITS is reached or the
+   * repository runs out of commits — whichever comes first.
+   *
+   * @param owner - repository owner/org, e.g. "facebook"
+   * @param repo  - repository name, e.g. "react"
+   */
+  async getCommits(owner: string, repo: string): Promise<Commit[]> {
+    try {
+      const commits: Commit[] = [];
+
+      const iterator = this.octokit.paginate.iterator(
+        this.octokit.rest.repos.listCommits,
+        { owner, repo, per_page: COMMITS_PER_PAGE }
+      );
+
+      for await (const { data: page } of iterator) {
+        for (const item of page) {
+          commits.push({
+            author:
+              item.author?.login ?? item.commit.author?.name ?? "Unknown",
+            date:
+              item.commit.author?.date ??
+              item.commit.committer?.date ??
+              new Date(0).toISOString(),
+            sha: item.sha,
+          });
+
+          if (commits.length >= MAX_COMMITS) break;
+        }
+
+        // Stop requesting further pages once we've hit the cap — no reason
+        // to pull page 6 from GitHub if we only needed 550 commits from it.
+        if (commits.length >= MAX_COMMITS) break;
+      }
+
+      return commits;
+    } catch (error) {
+      const status = getErrorStatus(error);
+
+      // A brand-new repo with zero commits yet — treat as "no commits",
+      // not an error.
+      if (status === 409) {
+        return [];
+      }
+      if (status === 404) {
+        throw new GitHubServiceError(
+          `Repository ${owner}/${repo} not found (it may be private or misspelled).`,
+          404
+        );
+      }
+      if (status === 403) {
+        throw new GitHubServiceError(
+          "GitHub API rate limit exceeded. Try again shortly.",
+          403
+        );
+      }
+
+      throw new GitHubServiceError(
+        `Failed to fetch commits for ${owner}/${repo}.`,
         500
       );
     }

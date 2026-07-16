@@ -24,3 +24,16 @@ export interface Contributor {
   avatar: string;
   commitCount: number;
 }
+
+/**
+ * A single commit's identity metadata (no diff/file content — this is
+ * intentionally lightweight since it's fetched up to 1000 at a time).
+ */
+export interface Commit {
+  /** GitHub username if the commit is linked to an account, else the raw
+   *  commit author name recorded in git, else "Unknown". */
+  author: string;
+  /** ISO 8601 commit author date. */
+  date: string;
+  sha: string;
+}
