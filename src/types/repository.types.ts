@@ -37,3 +37,15 @@ export interface Commit {
   date: string;
   sha: string;
 }
+
+/**
+ * A single entry in a repository's file tree. Binary files are excluded
+ * upstream by GitHubService.getRepositoryTree() — every "file" entry here
+ * is a text/source file safe to analyze.
+ */
+export interface RepositoryTreeEntry {
+  path: string;
+  type: "file" | "directory";
+  /** Size in bytes. Always null for directories (trees don't report a size). */
+  size: number | null;
+}

@@ -3,8 +3,10 @@ import type {
   Commit,
   Contributor,
   RepositoryMetadata,
+  RepositoryTreeEntry,
 } from "@/types/repository.types";
 import { getOrFetch, MemoryCache } from "@/lib/cache/memory-cache";
+import { isBinaryFile } from "@/utils/is-binary-file";
 
 const MAX_CONTRIBUTORS = 20;
 const MAX_COMMITS = 1000;
@@ -51,6 +53,9 @@ export class GitHubService {
 
   private readonly commitsCache = new MemoryCache<Commit[]>(CACHE_TTL_MS);
   private readonly commitsInFlight = new Map<string, Promise<Commit[]>>();
+
+  private readonly treeCache = new MemoryCache<RepositoryTreeEntry[]>(CACHE_TTL_MS);
+  private readonly treeInFlight = new Map<string, Promise<RepositoryTreeEntry[]>>();
 
   constructor(authToken?: string) {
     this.octokit = new Octokit({
@@ -258,6 +263,81 @@ export class GitHubService {
 
       throw new GitHubServiceError(
         `Failed to fetch commits for ${owner}/${repo}.`,
+        500
+      );
+    }
+  }
+
+  /**
+   * Fetches the full file tree of the repository's default branch,
+   * excluding binary files (images, fonts, archives, compiled artifacts,
+   * etc. — see utils/is-binary-file.ts). Cached per "owner/repo" for 5
+   * minutes.
+   *
+   * @param owner - repository owner/org, e.g. "facebook"
+   * @param repo  - repository name, e.g. "react"
+   */
+  async getRepositoryTree(
+    owner: string,
+    repo: string
+  ): Promise<RepositoryTreeEntry[]> {
+    const key = `${owner}/${repo}`;
+    return getOrFetch(this.treeCache, this.treeInFlight, key, () =>
+      this.fetchRepositoryTree(owner, repo)
+    );
+  }
+
+  private async fetchRepositoryTree(
+    owner: string,
+    repo: string
+  ): Promise<RepositoryTreeEntry[]> {
+    try {
+      const { data: repoData } = await this.octokit.rest.repos.get({
+        owner,
+        repo,
+      });
+
+      const { data: treeData } = await this.octokit.rest.git.getTree({
+        owner,
+        repo,
+        tree_sha: repoData.default_branch,
+        recursive: "true",
+      });
+
+      const entries: RepositoryTreeEntry[] = treeData.tree
+        .filter(
+          (
+            item
+          ): item is typeof item & { path: string; type: string } =>
+            typeof item.path === "string" &&
+            (item.type === "blob" || item.type === "tree")
+        )
+        .filter((item) => item.type !== "blob" || !isBinaryFile(item.path))
+        .map((item) => ({
+          path: item.path,
+          type: item.type === "tree" ? "directory" : "file",
+          size: item.type === "blob" ? item.size ?? 0 : null,
+        }));
+
+      return entries;
+    } catch (error) {
+      const status = getErrorStatus(error);
+
+      if (status === 404) {
+        throw new GitHubServiceError(
+          `Repository ${owner}/${repo} not found (it may be private or misspelled).`,
+          404
+        );
+      }
+      if (status === 403) {
+        throw new GitHubServiceError(
+          "GitHub API rate limit exceeded. Try again shortly.",
+          403
+        );
+      }
+
+      throw new GitHubServiceError(
+        `Failed to fetch file tree for ${owner}/${repo}.`,
         500
       );
     }
