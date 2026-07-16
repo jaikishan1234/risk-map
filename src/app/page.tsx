@@ -20,6 +20,7 @@ import {
 import { useRepositoryAnalysis } from "@/hooks/useRepositoryAnalysis";
 import { formatCompactNumber, formatRelativeDate } from "@/utils/format";
 import { ContributorsCard } from "@/components/repository/ContributorsCard";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export default function Home() {
   const { state, analyze } = useRepositoryAnalysis();
@@ -52,9 +53,12 @@ export default function Home() {
             </span>
             Single Point
           </a>
-          <span className="hidden font-mono text-xs text-muted-foreground sm:block">
-            codebase resilience intelligence
-          </span>
+          <div className="flex items-center gap-4">
+            <span className="hidden font-mono text-xs text-muted-foreground sm:block">
+              codebase resilience intelligence
+            </span>
+            <ThemeToggle />
+          </div>
         </header>
 
         <section
