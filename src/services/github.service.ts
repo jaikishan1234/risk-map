@@ -57,6 +57,9 @@ export class GitHubService {
   private readonly treeCache = new MemoryCache<RepositoryTreeEntry[]>(CACHE_TTL_MS);
   private readonly treeInFlight = new Map<string, Promise<RepositoryTreeEntry[]>>();
 
+  private readonly fileCommitsCache = new MemoryCache<Commit[]>(CACHE_TTL_MS);
+  private readonly fileCommitsInFlight = new Map<string, Promise<Commit[]>>();
+
   constructor(authToken?: string) {
     this.octokit = new Octokit({
       auth: authToken ?? process.env.GITHUB_TOKEN,
@@ -338,6 +341,76 @@ export class GitHubService {
 
       throw new GitHubServiceError(
         `Failed to fetch file tree for ${owner}/${repo}.`,
+        500
+      );
+    }
+  }
+
+  /**
+   * Fetches commit history for a single file path, newest first. Capped at
+   * one page (100 commits) rather than paginating fully like getCommits() —
+   * this method is meant to be called once per file when building a
+   * per-file risk table, so keeping it to a single request per file bounds
+   * the total API cost of analyzing many files. 100 commits is almost
+   * always enough to see a file's real ownership pattern even if it
+   * doesn't capture every commit in a very long-lived file's history.
+   * Cached per "owner/repo/path" for 5 minutes.
+   *
+   * @param owner - repository owner/org, e.g. "facebook"
+   * @param repo  - repository name, e.g. "react"
+   * @param path  - file path within the repo, e.g. "src/index.ts"
+   */
+  async getFileCommits(
+    owner: string,
+    repo: string,
+    path: string
+  ): Promise<Commit[]> {
+    const key = `${owner}/${repo}/${path}`;
+    return getOrFetch(
+      this.fileCommitsCache,
+      this.fileCommitsInFlight,
+      key,
+      () => this.fetchFileCommits(owner, repo, path)
+    );
+  }
+
+  private async fetchFileCommits(
+    owner: string,
+    repo: string,
+    path: string
+  ): Promise<Commit[]> {
+    try {
+      const { data } = await this.octokit.rest.repos.listCommits({
+        owner,
+        repo,
+        path,
+        per_page: 100,
+      });
+
+      return data.map((item) => ({
+        author: item.author?.login ?? item.commit.author?.name ?? "Unknown",
+        date:
+          item.commit.author?.date ??
+          item.commit.committer?.date ??
+          new Date(0).toISOString(),
+        sha: item.sha,
+      }));
+    } catch (error) {
+      const status = getErrorStatus(error);
+
+      // Empty repo, or a path that no longer exists on the default branch.
+      if (status === 409 || status === 404) {
+        return [];
+      }
+      if (status === 403) {
+        throw new GitHubServiceError(
+          "GitHub API rate limit exceeded. Try again shortly.",
+          403
+        );
+      }
+
+      throw new GitHubServiceError(
+        `Failed to fetch commit history for ${owner}/${repo}/${path}.`,
         500
       );
     }
