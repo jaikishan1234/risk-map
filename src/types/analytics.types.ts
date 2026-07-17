@@ -138,3 +138,15 @@ export interface FileRiskEntry {
   /** ISO 8601 date of the file's most recent commit, or null if none. */
   lastModified: string | null;
 }
+
+/**
+ * Everything the AI explanation prompt needs — all of it precomputed
+ * elsewhere in the app. See lib/ai/prompt-templates.ts.
+ */
+export interface AIExplanationInput {
+  repositoryName: string;
+  repositoryDescription: string | null;
+  riskDashboard: RiskDashboardData;
+  /** Optional — include when the Top Risky Files table has already been computed. */
+  topRiskyFiles?: FileRiskEntry[];
+}
