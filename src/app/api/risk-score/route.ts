@@ -3,14 +3,8 @@ import {
   analyzeRequestSchema,
   parseGitHubUrl,
 } from "@/lib/validation/analyze-request.schema";
-import { githubService, GitHubServiceError } from "@/services/github.service";
-import { computeCommitAnalytics } from "@/lib/analytics/commit-analytics";
-import { calculateBusFactor } from "@/lib/analytics/bus-factor";
-import { calculateConcentrationScore } from "@/lib/analytics/concentration-score";
-import { calculateRecencyRisk } from "@/lib/analytics/recency-risk";
-import { classifyFiles } from "@/lib/analytics/file-classification";
-import { calculateDocumentationRisk } from "@/lib/analytics/documentation-risk";
-import { calculateCompositeRiskScore } from "@/lib/analytics/composite-risk-score";
+import { GitHubServiceError } from "@/services/github.service";
+import { buildRiskDashboard } from "@/lib/analytics/build-risk-dashboard";
 import type { RiskDashboardData } from "@/types/analytics.types";
 
 interface RiskScoreResponseBody {
@@ -19,13 +13,6 @@ interface RiskScoreResponseBody {
 
 interface ErrorResponseBody {
   error: string;
-}
-
-function hasReadmeFile(paths: string[]): boolean {
-  return paths.some((path) => {
-    const filename = (path.split("/").pop() ?? path).toLowerCase();
-    return /^readme(\.[a-z0-9]+)?$/.test(filename);
-  });
 }
 
 export async function POST(
@@ -57,52 +44,11 @@ export async function POST(
     );
   }
 
-  const { owner, repo } = parsedUrl;
-
   try {
-    const [repository, commits, tree] = await Promise.all([
-      githubService.getRepository(owner, repo),
-      githubService.getCommits(owner, repo),
-      githubService.getRepositoryTree(owner, repo),
-    ]);
-
-    // ── Ground-truth commit stats ──────────────────────────────────────
-    const commitAnalytics = computeCommitAnalytics(commits);
-    const busFactorResult = calculateBusFactor(commits);
-    const concentrationScore = calculateConcentrationScore(
-      commitAnalytics.contributors
+    const { riskDashboard } = await buildRiskDashboard(
+      parsedUrl.owner,
+      parsedUrl.repo
     );
-    const recencyRisk = calculateRecencyRisk(repository.lastUpdated);
-
-    // ── File-tree derived stats ────────────────────────────────────────
-    const classification = classifyFiles(tree);
-    const hasReadme = hasReadmeFile(tree.map((entry) => entry.path));
-    const documentationRisk = calculateDocumentationRisk({
-      docsCount: classification.stats.byCategory.documentation,
-      codeFilesCount: classification.stats.byCategory.code,
-      hasReadme,
-    });
-
-    // ── Combine into one composite score ───────────────────────────────
-    const composite = calculateCompositeRiskScore({
-      busFactor: busFactorResult.busFactor,
-      concentrationScore,
-      recencyRisk,
-      documentationRisk,
-    });
-
-    const riskDashboard: RiskDashboardData = {
-      overallRiskScore: composite.overallRiskScore,
-      riskLevel: composite.riskLevel,
-      busFactor: busFactorResult.busFactor,
-      busFactorExplanation: busFactorResult.explanation,
-      documentationRisk,
-      totalCommits: commitAnalytics.totalCommits,
-      contributors: commitAnalytics.contributors,
-      fileClassification: classification.stats,
-      breakdown: composite.breakdown,
-    };
-
     return NextResponse.json({ riskDashboard }, { status: 200 });
   } catch (error) {
     if (error instanceof GitHubServiceError) {

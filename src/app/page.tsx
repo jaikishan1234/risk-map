@@ -17,20 +17,29 @@ import {
   analyzeRequestSchema,
   type AnalyzeRequest,
 } from "@/lib/validation/analyze-request.schema";
-import { useRepositoryAnalysis } from "@/hooks/useRepositoryAnalysis";
+import {
+  useRepositoryAnalysis,
+  type CoreAnalysisState,
+} from "@/hooks/useRepositoryAnalysis";
 import { formatCompactNumber, formatRelativeDate } from "@/utils/format";
 import { ContributorsCard } from "@/components/repository/ContributorsCard";
 import { RiskDashboard } from "@/components/repository/RiskDashboard";
+import { TopRiskyFilesTable } from "@/components/repository/TopRiskyFilesTable";
+import { AIInsightsCard } from "@/components/repository/AIInsightsCard";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
   RepositoryPreviewSkeleton,
   RiskDashboardSkeleton,
   ContributorsCardSkeleton,
+  TopRiskyFilesTableSkeleton,
+  AIInsightsCardSkeleton,
 } from "@/components/repository/skeletons";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ListTree } from "lucide-react";
 
 export default function Home() {
-  const { state, analyze } = useRepositoryAnalysis();
-  const isLoading = state.status === "loading";
+  const { core, topRiskyFiles, aiInsights, analyze } = useRepositoryAnalysis();
+  const isLoading = core.status === "loading";
 
   const {
     register,
@@ -176,32 +185,70 @@ export default function Home() {
                   </span>
                   analysis / repository
                 </div>
-                <StatusBadge state={state} />
+                <StatusBadge state={core} />
               </div>
 
               <div className="p-5">
-                {state.status === "idle" && <IdlePreview />}
-                {state.status === "loading" && <RepositoryPreviewSkeleton />}
-                {state.status === "error" && <ErrorPreview message={state.message} />}
-                {state.status === "success" && (
-                  <RepositoryPreview repository={state.repository} />
+                {core.status === "idle" && <IdlePreview />}
+                {core.status === "loading" && <RepositoryPreviewSkeleton />}
+                {core.status === "error" && <ErrorPreview message={core.message} />}
+                {core.status === "success" && (
+                  <RepositoryPreview repository={core.repository} />
                 )}
               </div>
             </div>
           </div>
         </section>
 
-        {state.status === "loading" && (
+        {core.status === "loading" && (
           <section className="space-y-6 pb-16">
             <RiskDashboardSkeleton />
             <ContributorsCardSkeleton />
           </section>
         )}
 
-        {state.status === "success" && (
+        {core.status === "success" && (
           <section className="space-y-6 pb-16">
-            <RiskDashboard data={state.riskDashboard} />
-            <ContributorsCard contributors={state.contributors} />
+            <RiskDashboard data={core.riskDashboard} />
+            <ContributorsCard contributors={core.contributors} />
+
+            {/* Top Risky Files — loads independently of the core analysis above. */}
+            <Card className="border-border bg-card shadow-sm">
+              <CardHeader className="flex-row items-center gap-2 space-y-0">
+                <ListTree className="size-4 text-primary" aria-hidden="true" />
+                <CardTitle className="text-sm font-medium">
+                  Top Risky Files
+                </CardTitle>
+                <span className="ml-auto font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                  sampled from largest code files
+                </span>
+              </CardHeader>
+              <CardContent>
+                {topRiskyFiles.status === "loading" && <TopRiskyFilesTableSkeleton />}
+                {topRiskyFiles.status === "error" && (
+                  <p className="py-6 text-center font-mono text-xs text-destructive">
+                    {topRiskyFiles.message}
+                  </p>
+                )}
+                {topRiskyFiles.status === "success" && (
+                  <TopRiskyFilesTable files={topRiskyFiles.data} />
+                )}
+              </CardContent>
+            </Card>
+
+            {/* AI Insights — also independent; a Gemini failure (e.g. missing
+                API key) never blocks the deterministic sections above. */}
+            {aiInsights.status === "loading" && <AIInsightsCardSkeleton />}
+            {aiInsights.status === "error" && (
+              <Card className="border-border bg-card shadow-sm">
+                <CardContent className="py-6 text-center font-mono text-xs text-destructive">
+                  {aiInsights.message}
+                </CardContent>
+              </Card>
+            )}
+            {aiInsights.status === "success" && (
+              <AIInsightsCard data={aiInsights.data} />
+            )}
           </section>
         )}
       </div>
@@ -209,11 +256,7 @@ export default function Home() {
   );
 }
 
-function StatusBadge({
-  state,
-}: {
-  state: ReturnType<typeof useRepositoryAnalysis>["state"];
-}) {
+function StatusBadge({ state }: { state: CoreAnalysisState }) {
   if (state.status === "loading") {
     return (
       <span className="rounded-full bg-primary/10 px-2 py-1 font-mono text-[10px] font-medium text-primary">
@@ -302,10 +345,6 @@ function RepositoryPreview({
           label="updated"
           value={formatRelativeDate(repository.lastUpdated)}
         />
-      </div>
-
-      <div className="rounded-xl border border-border bg-muted/40 p-3 font-mono text-xs text-muted-foreground">
-        <span className="text-primary">→</span> Ownership risk scoring isn&apos;t wired up yet — this panel currently shows raw repository metadata only.
       </div>
     </div>
   );
