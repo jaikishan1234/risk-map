@@ -22,6 +22,11 @@ import { formatCompactNumber, formatRelativeDate } from "@/utils/format";
 import { ContributorsCard } from "@/components/repository/ContributorsCard";
 import { RiskDashboard } from "@/components/repository/RiskDashboard";
 import { ThemeToggle } from "@/components/theme-toggle";
+import {
+  RepositoryPreviewSkeleton,
+  RiskDashboardSkeleton,
+  ContributorsCardSkeleton,
+} from "@/components/repository/skeletons";
 
 export default function Home() {
   const { state, analyze } = useRepositoryAnalysis();
@@ -176,7 +181,7 @@ export default function Home() {
 
               <div className="p-5">
                 {state.status === "idle" && <IdlePreview />}
-                {state.status === "loading" && <LoadingPreview />}
+                {state.status === "loading" && <RepositoryPreviewSkeleton />}
                 {state.status === "error" && <ErrorPreview message={state.message} />}
                 {state.status === "success" && (
                   <RepositoryPreview repository={state.repository} />
@@ -185,6 +190,13 @@ export default function Home() {
             </div>
           </div>
         </section>
+
+        {state.status === "loading" && (
+          <section className="space-y-6 pb-16">
+            <RiskDashboardSkeleton />
+            <ContributorsCardSkeleton />
+          </section>
+        )}
 
         {state.status === "success" && (
           <section className="space-y-6 pb-16">
@@ -237,26 +249,6 @@ function IdlePreview() {
       <p className="max-w-xs font-mono text-xs text-muted-foreground">
         Paste a public GitHub repository URL to pull its metadata here.
       </p>
-    </div>
-  );
-}
-
-function LoadingPreview() {
-  return (
-    <div className="space-y-5" aria-live="polite" aria-busy="true">
-      <div className="flex items-end justify-between">
-        <div className="space-y-2">
-          <div className="h-3 w-28 animate-pulse rounded bg-muted" />
-          <div className="h-8 w-20 animate-pulse rounded bg-muted" />
-        </div>
-        <div className="h-10 w-20 animate-pulse rounded-lg bg-muted" />
-      </div>
-      <div className="grid grid-cols-3 gap-3">
-        {[0, 1, 2].map((i) => (
-          <div key={i} className="h-16 animate-pulse rounded-xl bg-muted" />
-        ))}
-      </div>
-      <span className="sr-only">Analyzing repository…</span>
     </div>
   );
 }
