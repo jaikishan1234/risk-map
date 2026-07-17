@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 import type { Contributor, RepositoryMetadata } from "@/types/repository.types";
+import type { RiskDashboardData } from "@/types/analytics.types";
 
 export type RepositoryAnalysisState =
   | { status: "idle" }
@@ -10,6 +11,7 @@ export type RepositoryAnalysisState =
       status: "success";
       repository: RepositoryMetadata;
       contributors: Contributor[];
+      riskDashboard: RiskDashboardData;
     }
   | { status: "error"; message: string };
 
@@ -23,6 +25,24 @@ interface ContributorsResponseBody {
   error?: string;
 }
 
+interface RiskScoreResponseBody {
+  riskDashboard?: RiskDashboardData;
+  error?: string;
+}
+
+async function postJson<T>(url: string, repositoryUrl: string): Promise<{
+  ok: boolean;
+  body: T;
+}> {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ repositoryUrl }),
+  });
+  const body: T = await response.json();
+  return { ok: response.ok, body };
+}
+
 export function useRepositoryAnalysis() {
   const [state, setState] = useState<RepositoryAnalysisState>({
     status: "idle",
@@ -32,51 +52,52 @@ export function useRepositoryAnalysis() {
     setState({ status: "loading" });
 
     try {
-      // Fetch repository metadata and contributors in parallel — they're
-      // independent GitHub API calls, no reason to wait on one for the other.
-      const [repositoryResponse, contributorsResponse] = await Promise.all([
-        fetch("/api/repository", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ repositoryUrl }),
-        }),
-        fetch("/api/contributors", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ repositoryUrl }),
-        }),
-      ]);
+      // All three are independent GitHub-derived calls — fetch in parallel
+      // rather than waiting on each one in sequence.
+      const [repositoryResult, contributorsResult, riskScoreResult] =
+        await Promise.all([
+          postJson<RepositoryResponseBody>("/api/repository", repositoryUrl),
+          postJson<ContributorsResponseBody>("/api/contributors", repositoryUrl),
+          postJson<RiskScoreResponseBody>("/api/risk-score", repositoryUrl),
+        ]);
 
-      const repositoryBody: RepositoryResponseBody = await repositoryResponse.json();
-      const contributorsBody: ContributorsResponseBody =
-        await contributorsResponse.json();
-
-      // Surface whichever call failed first. If the repo itself is
-      // invalid/not found, that error is almost always the more useful one
-      // to show, so check it first.
-      if (!repositoryResponse.ok || !repositoryBody.repository) {
+      // Surface whichever call failed first — the repo lookup failing is
+      // almost always the more fundamental problem, so check it first.
+      if (!repositoryResult.ok || !repositoryResult.body.repository) {
         setState({
           status: "error",
           message:
-            repositoryBody.error ?? "Something went wrong. Please try again.",
+            repositoryResult.body.error ??
+            "Something went wrong. Please try again.",
         });
         return;
       }
 
-      if (!contributorsResponse.ok || !contributorsBody.contributors) {
+      if (!contributorsResult.ok || !contributorsResult.body.contributors) {
         setState({
           status: "error",
           message:
-            contributorsBody.error ??
+            contributorsResult.body.error ??
             "Fetched repository info, but couldn't load contributors.",
+        });
+        return;
+      }
+
+      if (!riskScoreResult.ok || !riskScoreResult.body.riskDashboard) {
+        setState({
+          status: "error",
+          message:
+            riskScoreResult.body.error ??
+            "Fetched repository info, but couldn't compute the risk score.",
         });
         return;
       }
 
       setState({
         status: "success",
-        repository: repositoryBody.repository,
-        contributors: contributorsBody.contributors,
+        repository: repositoryResult.body.repository,
+        contributors: contributorsResult.body.contributors,
+        riskDashboard: riskScoreResult.body.riskDashboard,
       });
     } catch {
       setState({

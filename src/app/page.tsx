@@ -20,6 +20,7 @@ import {
 import { useRepositoryAnalysis } from "@/hooks/useRepositoryAnalysis";
 import { formatCompactNumber, formatRelativeDate } from "@/utils/format";
 import { ContributorsCard } from "@/components/repository/ContributorsCard";
+import { RiskDashboard } from "@/components/repository/RiskDashboard";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 export default function Home() {
@@ -186,7 +187,8 @@ export default function Home() {
         </section>
 
         {state.status === "success" && (
-          <section className="pb-16">
+          <section className="space-y-6 pb-16">
+            <RiskDashboard data={state.riskDashboard} />
             <ContributorsCard contributors={state.contributors} />
           </section>
         )}
