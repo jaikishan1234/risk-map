@@ -189,7 +189,12 @@ export function RiskDashboard({ data }: RiskDashboardProps) {
                         fontSize: 12,
                         fontFamily: "var(--font-mono, monospace)",
                         borderRadius: 8,
+                        background: "var(--popover)",
+                        color: "var(--popover-foreground)",
+                        border: "1px solid var(--border)",
                       }}
+                      itemStyle={{ color: "var(--popover-foreground)" }}
+                      labelStyle={{ color: "var(--popover-foreground)" }}
                     />
                   </PieChart>
                 </ResponsiveContainer>
@@ -226,9 +231,20 @@ export function RiskDashboard({ data }: RiskDashboardProps) {
                       fontSize: 12,
                       fontFamily: "var(--font-mono, monospace)",
                       borderRadius: 8,
+                      background: "var(--popover)",
+                      color: "var(--popover-foreground)",
+                      border: "1px solid var(--border)",
                     }}
+                    itemStyle={{ color: "var(--popover-foreground)" }}
+                    labelStyle={{ color: "var(--popover-foreground)" }}
+                    cursor={{ fill: "var(--muted)", opacity: 0.4 }}
                   />
-                  <Bar dataKey="value" fill="var(--primary)" radius={[0, 4, 4, 0]} />
+                  <Bar
+                    dataKey="value"
+                    fill="var(--primary)"
+                    background={{ fill: "var(--muted)", radius: 4 }}
+                    radius={[0, 4, 4, 0]}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </div>

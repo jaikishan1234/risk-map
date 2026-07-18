@@ -114,7 +114,12 @@ export function ContributorsDistributionChart({
                   fontSize: 12,
                   fontFamily: "var(--font-mono, monospace)",
                   borderRadius: 8,
+                  background: "var(--popover)",
+                  color: "var(--popover-foreground)",
+                  border: "1px solid var(--border)",
                 }}
+                itemStyle={{ color: "var(--popover-foreground)" }}
+                labelStyle={{ color: "var(--popover-foreground)" }}
               />
               {shown.map((c, index) => (
                 <Bar
