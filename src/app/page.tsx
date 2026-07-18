@@ -35,6 +35,8 @@ import { AIInsightsCard } from "@/components/repository/AIInsightsCard";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ErrorMessageCard } from "@/components/ErrorMessageCard";
+import { generateCodeownersContent } from "@/lib/export/generate-codeowners";
+import { downloadTextFile } from "@/utils/download-text-file";
 import {
   RepositoryPreviewSkeleton,
   RiskDashboardSkeleton,
@@ -43,7 +45,7 @@ import {
   AIInsightsCardSkeleton,
 } from "@/components/repository/skeletons";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ListTree } from "lucide-react";
+import { ListTree, Download } from "lucide-react";
 
 export default function Home() {
   // useSearchParams requires a Suspense boundary around any component that
@@ -114,6 +116,17 @@ function HomeContent() {
     // Intentionally not calling runAnalysis here — the URL already has
     // the right ?repo= param from the link itself, no need to rewrite it.
   }, [searchParams, setValue, analyze]);
+
+  // Formats the already-fetched Top Risky Files data into a real,
+  // downloadable CODEOWNERS file — pure client-side, no extra API calls,
+  // since the data driving it is already sitting in `topRiskyFiles`.
+  const handleExportCodeowners = useCallback(() => {
+    if (topRiskyFiles.status !== "success") return;
+    const parsed = parseGitHubUrl(analyzedUrl);
+    const repoLabel = parsed ? `${parsed.owner}/${parsed.repo}` : analyzedUrl;
+    const content = generateCodeownersContent(topRiskyFiles.data, repoLabel);
+    downloadTextFile("CODEOWNERS", content);
+  }, [topRiskyFiles, analyzedUrl]);
 
   // Clears results, the form, and the ?repo= param, then scrolls back to
   // the input — lets someone analyze a different repo without manually
@@ -314,9 +327,22 @@ function HomeContent() {
                   <CardTitle className="text-sm font-medium">
                     Top Risky Files
                   </CardTitle>
-                  <span className="ml-auto font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                    sampled from largest code files
-                  </span>
+                  <div className="ml-auto flex items-center gap-2">
+                    <span className="hidden font-mono text-[10px] uppercase tracking-wider text-muted-foreground sm:inline">
+                      sampled from largest code files
+                    </span>
+                    {topRiskyFiles.status === "success" && (
+                      <button
+                        type="button"
+                        onClick={handleExportCodeowners}
+                        aria-label="Download a CODEOWNERS file for the highest-risk files"
+                        className="flex items-center gap-1 rounded-full border border-border bg-background/70 px-2 py-1 font-mono text-[10px] text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <Download className="size-3" aria-hidden="true" />
+                        <span className="hidden sm:inline">EXPORT CODEOWNERS</span>
+                      </button>
+                    )}
+                  </div>
                 </CardHeader>
                 <CardContent className="pt-5">
                   {topRiskyFiles.status === "loading" && <TopRiskyFilesTableSkeleton />}
