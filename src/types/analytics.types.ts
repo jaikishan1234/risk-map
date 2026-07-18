@@ -124,6 +124,8 @@ export interface RiskDashboardData {
   contributors: ContributorCommitStats[];
   fileClassification: FileClassificationStats;
   breakdown: CompositeRiskResult["breakdown"];
+  /** True if GitHub truncated the file tree (very large repos) — file-count-derived stats (fileClassification, documentationRisk) may undercount. */
+  fileTreeTruncated: boolean;
 }
 
 /**
@@ -137,6 +139,18 @@ export interface FileRiskEntry {
   riskScore: number;
   /** ISO 8601 date of the file's most recent commit, or null if none. */
   lastModified: string | null;
+}
+
+/**
+ * Full drill-down for a single file — everything FileRiskEntry has, plus
+ * the contributor breakdown and recent commit timeline behind that score.
+ * Fetched on demand (see /api/file-details) rather than upfront for every
+ * row in the Top Risky Files table.
+ */
+export interface FileDetails extends FileRiskEntry {
+  totalCommits: number;
+  contributors: ContributorCommitStats[];
+  recentCommits: { sha: string; author: string; date: string }[];
 }
 
 /**

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronRight } from "lucide-react";
 
 import {
   Table,
@@ -14,9 +14,12 @@ import {
 import type { FileRiskEntry } from "@/types/analytics.types";
 import { getRiskLevelFromScore, RISK_LEVEL_COLOR } from "@/utils/risk-level";
 import { formatRelativeDate } from "@/utils/format";
+import { FileDetailsPanel } from "@/components/repository/FileDetailsPanel";
 
 interface TopRiskyFilesTableProps {
   files: FileRiskEntry[];
+  /** Needed so an expanded row can fetch that file's own details. */
+  repositoryUrl: string;
 }
 
 type SortKey = "path" | "owner" | "riskScore" | "lastModified";
@@ -46,9 +49,10 @@ function compareValues(
   return aValue.localeCompare(bValue);
 }
 
-export function TopRiskyFilesTable({ files }: TopRiskyFilesTableProps) {
+export function TopRiskyFilesTable({ files, repositoryUrl }: TopRiskyFilesTableProps) {
   const [sortKey, setSortKey] = useState<SortKey>("riskScore");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [expandedPath, setExpandedPath] = useState<string | null>(null);
 
   const sortedFiles = useMemo(() => {
     const sorted = [...files].sort((a, b) => compareValues(a, b, sortKey));
@@ -60,10 +64,12 @@ export function TopRiskyFilesTable({ files }: TopRiskyFilesTableProps) {
       setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
     } else {
       setSortKey(key);
-      // Risk score and last-modified read more naturally starting from
-      // "worst"/"most recent" first; file and owner read naturally A-Z.
       setSortDirection(key === "path" || key === "owner" ? "asc" : "desc");
     }
+  };
+
+  const toggleExpanded = (path: string) => {
+    setExpandedPath((current) => (current === path ? null : path));
   };
 
   if (files.length === 0) {
@@ -79,6 +85,7 @@ export function TopRiskyFilesTable({ files }: TopRiskyFilesTableProps) {
       <Table>
         <TableHeader>
           <TableRow className="hover:bg-transparent">
+            <TableHead className="w-6" />
             {COLUMNS.map((column) => (
               <TableHead key={column.key}>
                 <button
@@ -107,36 +114,83 @@ export function TopRiskyFilesTable({ files }: TopRiskyFilesTableProps) {
         <TableBody>
           {sortedFiles.map((file) => {
             const riskColor = RISK_LEVEL_COLOR[getRiskLevelFromScore(file.riskScore)];
+            const isExpanded = expandedPath === file.path;
+            const detailsId = `file-details-${slugifyPath(file.path)}`;
             return (
-              <TableRow key={file.path}>
-                <TableCell
-                  className="max-w-[280px] truncate font-mono text-xs text-foreground"
-                  title={file.path}
+              <>
+                <TableRow
+                  key={file.path}
+                  onClick={() => toggleExpanded(file.path)}
+                  className="cursor-pointer"
                 >
-                  {file.path}
-                </TableCell>
-                <TableCell className="font-mono text-xs text-muted-foreground">
-                  {file.owner ?? "—"}
-                </TableCell>
-                <TableCell>
-                  <span
-                    className="rounded-full px-2 py-0.5 font-mono text-xs font-medium"
-                    style={{
-                      color: riskColor,
-                      backgroundColor: `color-mix(in oklch, ${riskColor}, transparent 88%)`,
-                    }}
+                  <TableCell className="w-6">
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        // Row already has an onClick that toggles too — stop
+                        // propagation so this doesn't double-toggle back to
+                        // closed when both fire.
+                        event.stopPropagation();
+                        toggleExpanded(file.path);
+                      }}
+                      aria-expanded={isExpanded}
+                      aria-controls={detailsId}
+                      aria-label={`${isExpanded ? "Collapse" : "Expand"} details for ${file.path}`}
+                      className="rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <ChevronRight
+                        className={`size-3.5 transition-transform ${
+                          isExpanded ? "rotate-90" : ""
+                        }`}
+                        aria-hidden="true"
+                      />
+                    </button>
+                  </TableCell>
+                  <TableCell
+                    className="max-w-[280px] truncate font-mono text-xs text-foreground"
+                    title={file.path}
                   >
-                    {file.riskScore}
-                  </span>
-                </TableCell>
-                <TableCell className="font-mono text-xs text-muted-foreground">
-                  {file.lastModified ? formatRelativeDate(file.lastModified) : "—"}
-                </TableCell>
-              </TableRow>
+                    {file.path}
+                  </TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground">
+                    {file.owner ?? "—"}
+                  </TableCell>
+                  <TableCell>
+                    <span
+                      className="rounded-full px-2 py-0.5 font-mono text-xs font-medium"
+                      style={{
+                        color: riskColor,
+                        backgroundColor: `color-mix(in oklch, ${riskColor}, transparent 88%)`,
+                      }}
+                    >
+                      {file.riskScore}
+                    </span>
+                  </TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground">
+                    {file.lastModified ? formatRelativeDate(file.lastModified) : "—"}
+                  </TableCell>
+                </TableRow>
+                {isExpanded && (
+                  <TableRow
+                    key={`${file.path}-details`}
+                    id={detailsId}
+                    className="hover:bg-transparent"
+                  >
+                    <TableCell colSpan={5} className="bg-muted/20 p-0">
+                      <FileDetailsPanel repositoryUrl={repositoryUrl} path={file.path} />
+                    </TableCell>
+                  </TableRow>
+                )}
+              </>
             );
           })}
         </TableBody>
       </Table>
     </div>
   );
+}
+
+/** Turns a file path into a DOM-id-safe string for aria-controls linking. */
+function slugifyPath(path: string): string {
+  return path.replace(/[^a-zA-Z0-9_-]/g, "-");
 }
