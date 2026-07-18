@@ -1,12 +1,16 @@
 "use client";
 
+import { useCallback, useEffect, useRef, useState, Suspense } from "react";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useForm } from "react-hook-form";
 import {
   ArrowRight,
   Braces,
-  CircleAlert,
+  Check,
+  Copy,
   GitBranch,
   GitFork,
+  RotateCcw,
   ShieldAlert,
   Star,
 } from "lucide-react";
@@ -15,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   analyzeRequestSchema,
+  parseGitHubUrl,
   type AnalyzeRequest,
 } from "@/lib/validation/analyze-request.schema";
 import {
@@ -27,6 +32,8 @@ import { RiskDashboard } from "@/components/repository/RiskDashboard";
 import { TopRiskyFilesTable } from "@/components/repository/TopRiskyFilesTable";
 import { AIInsightsCard } from "@/components/repository/AIInsightsCard";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { ErrorMessageCard } from "@/components/ErrorMessageCard";
 import {
   RepositoryPreviewSkeleton,
   RiskDashboardSkeleton,
@@ -38,12 +45,29 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ListTree } from "lucide-react";
 
 export default function Home() {
-  const { core, topRiskyFiles, aiInsights, analyze } = useRepositoryAnalysis();
+  // useSearchParams requires a Suspense boundary around any component that
+  // calls it, per Next.js App Router — without this, the page opts out of
+  // static rendering with a build-time warning.
+  return (
+    <Suspense fallback={null}>
+      <HomeContent />
+    </Suspense>
+  );
+}
+
+function HomeContent() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const { core, topRiskyFiles, aiInsights, analyze, reset } = useRepositoryAnalysis();
   const isLoading = core.status === "loading";
+  const hasAutoAnalyzed = useRef(false);
+  const [analyzedUrl, setAnalyzedUrl] = useState("");
 
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors },
   } = useForm<AnalyzeRequest>({
     mode: "onSubmit",
@@ -51,9 +75,59 @@ export default function Home() {
     defaultValues: { repositoryUrl: "" },
   });
 
+  // Runs an analysis AND updates the URL to `?repo=owner/name`, so the
+  // resulting page is a link you can copy and share — pasting it re-runs
+  // the same analysis automatically on load (see the effect below).
+  // router.push (not replace) so browser back/forward moves between
+  // previously analyzed repos, rather than only ever having one history entry.
+  const runAnalysis = useCallback(
+    (repositoryUrl: string) => {
+      analyze(repositoryUrl);
+      setAnalyzedUrl(repositoryUrl);
+      const parsed = parseGitHubUrl(repositoryUrl);
+      if (parsed) {
+        const params = new URLSearchParams(searchParams.toString());
+        params.set("repo", `${parsed.owner}/${parsed.repo}`);
+        router.push(`${pathname}?${params.toString()}`, { scroll: false });
+      }
+    },
+    [analyze, pathname, router, searchParams]
+  );
+
   const onSubmit = handleSubmit((data) => {
-    analyze(data.repositoryUrl);
+    runAnalysis(data.repositoryUrl);
   });
+
+  // On first load, if the URL already has ?repo=owner/name (someone opened
+  // a shared link), prefill the input and auto-run the analysis.
+  useEffect(() => {
+    if (hasAutoAnalyzed.current) return;
+    const repoParam = searchParams.get("repo");
+    if (!repoParam) return;
+
+    hasAutoAnalyzed.current = true;
+    const repositoryUrl = `https://github.com/${repoParam}`;
+    setValue("repositoryUrl", repositoryUrl);
+    setAnalyzedUrl(repositoryUrl);
+    analyze(repositoryUrl);
+    // Intentionally not calling runAnalysis here — the URL already has
+    // the right ?repo= param from the link itself, no need to rewrite it.
+  }, [searchParams, setValue, analyze]);
+
+  // Clears results, the form, and the ?repo= param, then scrolls back to
+  // the input — lets someone analyze a different repo without manually
+  // clearing the field or scrolling up past a long results page.
+  const handleReset = useCallback(() => {
+    reset();
+    setAnalyzedUrl("");
+    setValue("repositoryUrl", "");
+    hasAutoAnalyzed.current = false;
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("repo");
+    const query = params.toString();
+    router.push(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [reset, setValue, searchParams, router, pathname]);
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-background text-foreground">
@@ -176,7 +250,7 @@ export default function Home() {
           <div className="relative mx-auto w-full max-w-lg lg:max-w-none">
             <div className="absolute -inset-5 -z-10 rounded-[2rem] bg-primary/5 blur-3xl" />
             <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-2xl shadow-black/10">
-              <div className="flex items-center justify-between border-b border-border px-5 py-4">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-5 py-4">
                 <div className="flex items-center gap-2 font-mono text-xs text-muted-foreground">
                   <span className="flex gap-1.5">
                     <span className="size-2 rounded-full bg-red-400" />
@@ -185,16 +259,30 @@ export default function Home() {
                   </span>
                   analysis / repository
                 </div>
-                <StatusBadge state={core} />
+                <div className="flex items-center gap-2">
+                  {(core.status === "success" || core.status === "error") && (
+                    <NewAnalysisButton onReset={handleReset} />
+                  )}
+                  {core.status === "success" && <CopyLinkButton />}
+                  <StatusBadge state={core} />
+                </div>
               </div>
 
               <div className="p-5">
-                {core.status === "idle" && <IdlePreview />}
-                {core.status === "loading" && <RepositoryPreviewSkeleton />}
-                {core.status === "error" && <ErrorPreview message={core.message} />}
-                {core.status === "success" && (
-                  <RepositoryPreview repository={core.repository} />
-                )}
+                <ErrorBoundary sectionName="repository preview">
+                  {core.status === "idle" && <IdlePreview />}
+                  {core.status === "loading" && <RepositoryPreviewSkeleton />}
+                  {core.status === "error" && (
+                    <ErrorMessageCard
+                      message={core.message}
+                      httpStatus={core.httpStatus}
+                      compact
+                    />
+                  )}
+                  {core.status === "success" && (
+                    <RepositoryPreview repository={core.repository} />
+                  )}
+                </ErrorBoundary>
               </div>
             </div>
           </div>
@@ -209,50 +297,116 @@ export default function Home() {
 
         {core.status === "success" && (
           <section className="space-y-6 pb-16">
-            <RiskDashboard data={core.riskDashboard} />
-            <ContributorsCard contributors={core.contributors} />
+            <ErrorBoundary sectionName="risk dashboard">
+              <RiskDashboard data={core.riskDashboard} />
+            </ErrorBoundary>
+
+            <ErrorBoundary sectionName="contributors">
+              <ContributorsCard contributors={core.contributors} />
+            </ErrorBoundary>
 
             {/* Top Risky Files — loads independently of the core analysis above. */}
-            <Card className="border-border bg-card shadow-sm">
-              <CardHeader className="flex-row items-center gap-2 space-y-0">
-                <ListTree className="size-4 text-primary" aria-hidden="true" />
-                <CardTitle className="text-sm font-medium">
-                  Top Risky Files
-                </CardTitle>
-                <span className="ml-auto font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                  sampled from largest code files
-                </span>
-              </CardHeader>
-              <CardContent>
-                {topRiskyFiles.status === "loading" && <TopRiskyFilesTableSkeleton />}
-                {topRiskyFiles.status === "error" && (
-                  <p className="py-6 text-center font-mono text-xs text-destructive">
-                    {topRiskyFiles.message}
-                  </p>
-                )}
-                {topRiskyFiles.status === "success" && (
-                  <TopRiskyFilesTable files={topRiskyFiles.data} />
-                )}
-              </CardContent>
-            </Card>
+            <ErrorBoundary sectionName="top risky files">
+              <Card className="border-border bg-card shadow-sm">
+                <CardHeader className="flex-row items-center gap-2 space-y-0">
+                  <ListTree className="size-4 text-primary" aria-hidden="true" />
+                  <CardTitle className="text-sm font-medium">
+                    Top Risky Files
+                  </CardTitle>
+                  <span className="ml-auto font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                    sampled from largest code files
+                  </span>
+                </CardHeader>
+                <CardContent>
+                  {topRiskyFiles.status === "loading" && <TopRiskyFilesTableSkeleton />}
+                  {topRiskyFiles.status === "error" && (
+                    <ErrorMessageCard
+                      message={topRiskyFiles.message}
+                      httpStatus={topRiskyFiles.httpStatus}
+                      compact
+                    />
+                  )}
+                  {topRiskyFiles.status === "success" && (
+                    <TopRiskyFilesTable
+                      files={topRiskyFiles.data}
+                      repositoryUrl={analyzedUrl}
+                    />
+                  )}
+                </CardContent>
+              </Card>
+            </ErrorBoundary>
 
             {/* AI Insights — also independent; a Gemini failure (e.g. missing
                 API key) never blocks the deterministic sections above. */}
-            {aiInsights.status === "loading" && <AIInsightsCardSkeleton />}
-            {aiInsights.status === "error" && (
-              <Card className="border-border bg-card shadow-sm">
-                <CardContent className="py-6 text-center font-mono text-xs text-destructive">
-                  {aiInsights.message}
-                </CardContent>
-              </Card>
-            )}
-            {aiInsights.status === "success" && (
-              <AIInsightsCard data={aiInsights.data} />
-            )}
+            <ErrorBoundary sectionName="AI insights">
+              {aiInsights.status === "loading" && <AIInsightsCardSkeleton />}
+              {aiInsights.status === "error" && (
+                <Card className="border-border bg-card shadow-sm">
+                  <CardContent>
+                    <ErrorMessageCard
+                      message={aiInsights.message}
+                      httpStatus={aiInsights.httpStatus}
+                      compact
+                    />
+                  </CardContent>
+                </Card>
+              )}
+              {aiInsights.status === "success" && (
+                <AIInsightsCard data={aiInsights.data} />
+              )}
+            </ErrorBoundary>
           </section>
         )}
       </div>
     </main>
+  );
+}
+
+function CopyLinkButton() {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard API can fail (permissions, non-secure context) — fail
+      // silently rather than showing an error for a non-critical action.
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      className="flex items-center gap-1 rounded-full border border-border bg-background/70 px-2 py-1 font-mono text-[10px] text-muted-foreground transition-colors hover:text-foreground"
+    >
+      {copied ? (
+        <>
+          <Check className="size-3" aria-hidden="true" />
+          <span className="hidden sm:inline">COPIED</span>
+        </>
+      ) : (
+        <>
+          <Copy className="size-3" aria-hidden="true" />
+          <span className="hidden sm:inline">COPY LINK</span>
+        </>
+      )}
+    </button>
+  );
+}
+
+function NewAnalysisButton({ onReset }: { onReset: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onReset}
+      className="flex items-center gap-1 rounded-full border border-border bg-background/70 px-2 py-1 font-mono text-[10px] text-muted-foreground transition-colors hover:text-foreground"
+    >
+      <RotateCcw className="size-3" aria-hidden="true" />
+      <span className="hidden sm:inline">NEW ANALYSIS</span>
+    </button>
   );
 }
 
@@ -292,18 +446,6 @@ function IdlePreview() {
       <p className="max-w-xs font-mono text-xs text-muted-foreground">
         Paste a public GitHub repository URL to pull its metadata here.
       </p>
-    </div>
-  );
-}
-
-function ErrorPreview({ message }: { message: string }) {
-  return (
-    <div
-      role="alert"
-      className="flex flex-col items-center gap-3 py-8 text-center"
-    >
-      <CircleAlert className="size-8 text-destructive" aria-hidden="true" />
-      <p className="max-w-xs font-mono text-xs text-destructive">{message}</p>
     </div>
   );
 }

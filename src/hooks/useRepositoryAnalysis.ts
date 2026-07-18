@@ -17,13 +17,13 @@ export type CoreAnalysisState =
       contributors: Contributor[];
       riskDashboard: RiskDashboardData;
     }
-  | { status: "error"; message: string };
+  | { status: "error"; message: string; httpStatus?: number };
 
 export type AsyncSlice<T> =
   | { status: "idle" }
   | { status: "loading" }
   | { status: "success"; data: T }
-  | { status: "error"; message: string };
+  | { status: "error"; message: string; httpStatus?: number };
 
 interface RepositoryResponseBody {
   repository?: RepositoryMetadata;
@@ -46,29 +46,32 @@ interface ExplainResponseBody {
   error?: string;
 }
 
-async function postJson<T>(url: string, repositoryUrl: string): Promise<{
-  ok: boolean;
-  body: T;
-}> {
+async function postJson<T>(
+  url: string,
+  repositoryUrl: string
+): Promise<{ ok: boolean; status: number; body: T }> {
   const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ repositoryUrl }),
   });
   const body: T = await response.json();
-  return { ok: response.ok, body };
+  return { ok: response.ok, status: response.status, body };
 }
 
 /**
  * Fires all five endpoints together on Analyze, but resolves into three
  * independent pieces of state instead of one combined one:
- *   - `core` (repository + contributors + risk score) — the fast path,
- *     three calls that mostly hit fresh GitHub data.
- *   - `topRiskyFiles` and `aiInsights` — slower (up to 15 extra GitHub
- *     calls, plus an LLM round-trip) and independent of each other and of
- *     `core`. Each renders as soon as it's ready rather than making the
- *     whole page wait on the slowest piece, and a failure in one (e.g. no
- *     GEMINI_API_KEY configured) doesn't block the other two from showing.
+ *   - `core` (repository + contributors + risk score) — the fast path.
+ *   - `topRiskyFiles` and `aiInsights` — slower and independent of each
+ *     other and of `core`, so a failure in one doesn't block the others.
+ *
+ * Every error state carries `httpStatus` alongside the message, so the UI
+ * can distinguish "repository not found" (404) from "rate limited"
+ * (403/429) from "GitHub API had an outage" (500+) from "your network
+ * dropped" (no status at all — the request never reached the server) and
+ * show an appropriately different, user-friendly message for each. See
+ * utils/error-messages.ts and components/ErrorMessageCard.tsx.
  */
 export function useRepositoryAnalysis() {
   const [core, setCore] = useState<CoreAnalysisState>({ status: "idle" });
@@ -100,6 +103,7 @@ export function useRepositoryAnalysis() {
             message:
               repositoryResult.body.error ??
               "Something went wrong. Please try again.",
+            httpStatus: repositoryResult.status,
           });
           return;
         }
@@ -109,6 +113,7 @@ export function useRepositoryAnalysis() {
             message:
               contributorsResult.body.error ??
               "Fetched repository info, but couldn't load contributors.",
+            httpStatus: contributorsResult.status,
           });
           return;
         }
@@ -118,6 +123,7 @@ export function useRepositoryAnalysis() {
             message:
               riskScoreResult.body.error ??
               "Fetched repository info, but couldn't compute the risk score.",
+            httpStatus: riskScoreResult.status,
           });
           return;
         }
@@ -129,9 +135,11 @@ export function useRepositoryAnalysis() {
           riskDashboard: riskScoreResult.body.riskDashboard,
         });
       } catch {
+        // fetch() itself threw — the request never reached the server
+        // (offline, DNS failure, etc.), so there's no httpStatus at all.
         setCore({
           status: "error",
-          message: "Network error — check your connection and try again.",
+          message: "Could not reach the server.",
         });
       }
     })();
@@ -147,6 +155,7 @@ export function useRepositoryAnalysis() {
           setTopRiskyFiles({
             status: "error",
             message: result.body.error ?? "Couldn't rank risky files.",
+            httpStatus: result.status,
           });
           return;
         }
@@ -154,7 +163,7 @@ export function useRepositoryAnalysis() {
       } catch {
         setTopRiskyFiles({
           status: "error",
-          message: "Network error — check your connection and try again.",
+          message: "Could not reach the server.",
         });
       }
     })();
@@ -170,6 +179,7 @@ export function useRepositoryAnalysis() {
           setAiInsights({
             status: "error",
             message: result.body.error ?? "Couldn't generate AI insights.",
+            httpStatus: result.status,
           });
           return;
         }
@@ -177,7 +187,7 @@ export function useRepositoryAnalysis() {
       } catch {
         setAiInsights({
           status: "error",
-          message: "Network error — check your connection and try again.",
+          message: "Could not reach the server.",
         });
       }
     })();
