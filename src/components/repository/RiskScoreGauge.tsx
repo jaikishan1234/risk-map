@@ -1,3 +1,4 @@
+import type { RiskLevel } from "@/types/analytics.types";
 import {
   getRiskLevelFromScore,
   RISK_LEVEL_COLOR,
@@ -15,7 +16,7 @@ interface RiskScoreGaugeProps {
  * Semicircular gauge showing a 0-100 risk score. Color and label are
  * derived entirely from the score itself via the shared threshold table
  * in utils/risk-level.ts — the same thresholds the composite risk scorer
- * uses — so a gauge and a badge elsewhere in the app will always agree on
+ * uses — so this gauge and any badge elsewhere in the app always agree on
  * what counts as "high" vs "critical".
  *
  * Drawn as a single SVG arc using the `pathLength` attribute to normalize

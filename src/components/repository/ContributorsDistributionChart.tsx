@@ -36,12 +36,12 @@ export function ContributorsDistributionChart({
   if (contributors.length === 0) {
     return (
       <Card className="border-border bg-card shadow-sm">
-        <CardHeader>
+        <CardHeader className="border-b border-border pb-4">
           <CardTitle className="text-sm font-medium">
             Ownership Concentration
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-5">
           <p className="py-6 text-center font-mono text-xs text-muted-foreground">
             No contributor data available for this repository.
           </p>
@@ -83,7 +83,7 @@ export function ContributorsDistributionChart({
 
   return (
     <Card className="border-border bg-card shadow-sm">
-      <CardHeader className="flex-row items-center justify-between space-y-0">
+      <CardHeader className="flex-row items-center justify-between space-y-0 border-b border-border pb-4">
         <CardTitle className="text-sm font-medium">
           Ownership Concentration
         </CardTitle>
@@ -98,7 +98,7 @@ export function ContributorsDistributionChart({
         </span>
       </CardHeader>
 
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-4 pt-5">
         <div className="h-12 w-full">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart

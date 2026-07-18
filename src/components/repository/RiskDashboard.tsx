@@ -16,26 +16,15 @@ import { Gauge, GitFork, Users, FileText, TriangleAlert } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { RiskDashboardData } from "@/types/analytics.types";
-import type { RiskLevel } from "@/types/analytics.types";
 import { getContributorColor, OTHERS_CHART_COLOR } from "@/utils/chart-colors";
+import { RiskScoreGauge } from "@/components/repository/RiskScoreGauge";
+import { ContributorsDistributionChart } from "@/components/repository/ContributorsDistributionChart";
 
 interface RiskDashboardProps {
   data: RiskDashboardData;
 }
 
-const RISK_LEVEL_STYLES: Record<
-  RiskLevel,
-  { label: string; text: string; bg: string }
-> = {
-  critical: { label: "CRITICAL", text: "text-destructive", bg: "bg-destructive/10" },
-  high: { label: "HIGH", text: "text-amber-600", bg: "bg-amber-500/10" },
-  medium: { label: "MEDIUM", text: "text-yellow-600", bg: "bg-yellow-500/10" },
-  low: { label: "LOW", text: "text-emerald-600", bg: "bg-emerald-500/10" },
-  unknown: { label: "UNKNOWN", text: "text-muted-foreground", bg: "bg-muted" },
-};
-
 export function RiskDashboard({ data }: RiskDashboardProps) {
-  const riskStyle = RISK_LEVEL_STYLES[data.riskLevel];
   const documentationScore = Math.round((100 - data.documentationRisk) * 10) / 10;
 
   const topContributors = data.contributors.slice(0, 6);
@@ -73,22 +62,14 @@ export function RiskDashboard({ data }: RiskDashboardProps) {
       {/* Stat cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="border-border bg-card shadow-sm">
-          <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
+          <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
               <Gauge className="size-3.5" aria-hidden="true" />
               OVERALL RISK
             </CardTitle>
-            <span
-              className={`rounded-full px-2 py-0.5 font-mono text-[10px] font-medium ${riskStyle.bg} ${riskStyle.text}`}
-            >
-              {riskStyle.label}
-            </span>
           </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-semibold tracking-tight text-foreground">
-              {data.overallRiskScore}
-              <span className="text-sm font-normal text-muted-foreground">/100</span>
-            </p>
+          <CardContent className="flex items-center justify-center pb-1">
+            <RiskScoreGauge score={data.overallRiskScore} size={140} />
           </CardContent>
         </Card>
 
@@ -251,6 +232,12 @@ export function RiskDashboard({ data }: RiskDashboardProps) {
           </CardContent>
         </Card>
       </div>
+
+      {/* Ownership concentration — complements the pie chart above with an
+          explicit HHI score and a linear (easier to compare precisely than
+          pie-slice angles) view of concentration. Full-width since it's a
+          thin horizontal bar rather than a squarish chart. */}
+      <ContributorsDistributionChart contributors={data.contributors} />
     </div>
   );
 }
