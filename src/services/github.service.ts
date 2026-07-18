@@ -3,6 +3,7 @@ import type {
   Commit,
   Contributor,
   RepositoryMetadata,
+  RepositoryTree,
   RepositoryTreeEntry,
 } from "@/types/repository.types";
 import { getOrFetch, MemoryCache } from "@/lib/cache/memory-cache";
@@ -54,8 +55,8 @@ export class GitHubService {
   private readonly commitsCache = new MemoryCache<Commit[]>(CACHE_TTL_MS);
   private readonly commitsInFlight = new Map<string, Promise<Commit[]>>();
 
-  private readonly treeCache = new MemoryCache<RepositoryTreeEntry[]>(CACHE_TTL_MS);
-  private readonly treeInFlight = new Map<string, Promise<RepositoryTreeEntry[]>>();
+  private readonly treeCache = new MemoryCache<RepositoryTree>(CACHE_TTL_MS);
+  private readonly treeInFlight = new Map<string, Promise<RepositoryTree>>();
 
   private readonly fileCommitsCache = new MemoryCache<Commit[]>(CACHE_TTL_MS);
   private readonly fileCommitsInFlight = new Map<string, Promise<Commit[]>>();
@@ -283,7 +284,7 @@ export class GitHubService {
   async getRepositoryTree(
     owner: string,
     repo: string
-  ): Promise<RepositoryTreeEntry[]> {
+  ): Promise<RepositoryTree> {
     const key = `${owner}/${repo}`;
     return getOrFetch(this.treeCache, this.treeInFlight, key, () =>
       this.fetchRepositoryTree(owner, repo)
@@ -293,7 +294,7 @@ export class GitHubService {
   private async fetchRepositoryTree(
     owner: string,
     repo: string
-  ): Promise<RepositoryTreeEntry[]> {
+  ): Promise<RepositoryTree> {
     try {
       const { data: repoData } = await this.octokit.rest.repos.get({
         owner,
@@ -322,7 +323,7 @@ export class GitHubService {
           size: item.type === "blob" ? item.size ?? 0 : null,
         }));
 
-      return entries;
+      return { entries, truncated: treeData.truncated ?? false };
     } catch (error) {
       const status = getErrorStatus(error);
 

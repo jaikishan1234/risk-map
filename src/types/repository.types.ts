@@ -49,3 +49,16 @@ export interface RepositoryTreeEntry {
   /** Size in bytes. Always null for directories (trees don't report a size). */
   size: number | null;
 }
+
+/**
+ * Wraps the tree entries with GitHub's `truncated` flag. GitHub caps
+ * recursive tree results at ~100,000 entries or ~7MB — past that, it
+ * returns a partial list with truncated: true rather than an error. This
+ * flag lets callers (and eventually the UI) be honest about "showing
+ * partial results" instead of silently under-reporting file counts on
+ * enormous monorepos.
+ */
+export interface RepositoryTree {
+  entries: RepositoryTreeEntry[];
+  truncated: boolean;
+}

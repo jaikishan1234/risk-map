@@ -18,14 +18,14 @@ export async function buildTopRiskyFiles(
   repo: string
 ): Promise<FileRiskEntry[]> {
   const tree = await githubService.getRepositoryTree(owner, repo);
-  const { files: classifiedFiles } = classifyFiles(tree);
+  const { files: classifiedFiles } = classifyFiles(tree.entries);
   const codeFilePaths = new Set(
     classifiedFiles
       .filter((file) => file.category === "code")
       .map((file) => file.path)
   );
 
-  const sampledFiles = tree
+  const sampledFiles = tree.entries
     .filter((entry) => entry.type === "file" && codeFilePaths.has(entry.path))
     .sort((a, b) => (b.size ?? 0) - (a.size ?? 0))
     .slice(0, MAX_FILES_ANALYZED);

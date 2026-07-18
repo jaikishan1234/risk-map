@@ -42,8 +42,8 @@ export async function buildRiskDashboard(
   const concentrationScore = calculateConcentrationScore(commitAnalytics.contributors);
   const recencyRisk = calculateRecencyRisk(repository.lastUpdated);
 
-  const classification = classifyFiles(tree);
-  const hasReadme = hasReadmeFile(tree);
+  const classification = classifyFiles(tree.entries);
+  const hasReadme = hasReadmeFile(tree.entries);
   const documentationRisk = calculateDocumentationRisk({
     docsCount: classification.stats.byCategory.documentation,
     codeFilesCount: classification.stats.byCategory.code,
@@ -67,6 +67,7 @@ export async function buildRiskDashboard(
     contributors: commitAnalytics.contributors,
     fileClassification: classification.stats,
     breakdown: composite.breakdown,
+    fileTreeTruncated: tree.truncated,
   };
 
   return { repository, riskDashboard };

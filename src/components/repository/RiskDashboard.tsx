@@ -12,7 +12,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Gauge, GitFork, Users, FileText } from "lucide-react";
+import { Gauge, GitFork, Users, FileText, TriangleAlert } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { RiskDashboardData } from "@/types/analytics.types";
@@ -59,6 +59,17 @@ export function RiskDashboard({ data }: RiskDashboardProps) {
 
   return (
     <div className="space-y-4">
+      {data.fileTreeTruncated && (
+        <div className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 font-mono text-xs text-amber-700 dark:text-amber-400">
+          <TriangleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+          <span>
+            This repository&apos;s file tree is very large — GitHub returned a
+            partial listing. Documentation and file-count stats below may
+            undercount the true totals.
+          </span>
+        </div>
+      )}
+
       {/* Stat cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="border-border bg-card shadow-sm">
@@ -143,39 +154,47 @@ export function RiskDashboard({ data }: RiskDashboardProps) {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-64 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={pieData}
-                    dataKey="value"
-                    nameKey="name"
-                    innerRadius={50}
-                    outerRadius={80}
-                    paddingAngle={2}
-                  >
-                    {pieData.map((entry, index) => (
-                      <Cell
-                        key={entry.name}
-                        fill={
-                          entry.name === "Others"
-                            ? OTHERS_CHART_COLOR
-                            : getContributorColor(index)
-                        }
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    formatter={(value: number) => [`${value}%`, "commit share"]}
-                    contentStyle={{
-                      fontSize: 12,
-                      fontFamily: "var(--font-mono, monospace)",
-                      borderRadius: 8,
-                    }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
+            {pieData.length === 0 ? (
+              <div className="flex h-64 items-center justify-center">
+                <p className="font-mono text-xs text-muted-foreground">
+                  No commit history to chart yet.
+                </p>
+              </div>
+            ) : (
+              <div className="h-64 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={pieData}
+                      dataKey="value"
+                      nameKey="name"
+                      innerRadius={50}
+                      outerRadius={80}
+                      paddingAngle={2}
+                    >
+                      {pieData.map((entry, index) => (
+                        <Cell
+                          key={entry.name}
+                          fill={
+                            entry.name === "Others"
+                              ? OTHERS_CHART_COLOR
+                              : getContributorColor(index)
+                          }
+                        />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(value: number) => [`${value}%`, "commit share"]}
+                      contentStyle={{
+                        fontSize: 12,
+                        fontFamily: "var(--font-mono, monospace)",
+                        borderRadius: 8,
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            )}
           </CardContent>
         </Card>
 
