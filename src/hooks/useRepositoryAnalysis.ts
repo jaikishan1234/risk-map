@@ -37,14 +37,6 @@ interface RiskScoreResponseBody {
   riskDashboard?: RiskDashboardData;
   error?: string;
 }
-interface TopRiskyFilesResponseBody {
-  files?: FileRiskEntry[];
-  error?: string;
-}
-interface ExplainResponseBody {
-  insights?: AIExplanationOutput;
-  error?: string;
-}
 
 async function postJson<T>(
   url: string,
@@ -57,6 +49,38 @@ async function postJson<T>(
   });
   const body: T = await response.json();
   return { ok: response.ok, status: response.status, body };
+}
+
+/**
+ * Shared shape for `topRiskyFiles` and `aiInsights`: fetch one endpoint,
+ * pull one named field out of the response, and set an AsyncSlice based
+ * on whether that field came back. Both slices followed this exact
+ * pattern independently before — pulled out once here since it's the
+ * literal same steps, just a different URL/field/fallback message.
+ */
+async function loadAsyncSlice<T>(
+  url: string,
+  repositoryUrl: string,
+  extractData: (body: Record<string, unknown>) => T | undefined,
+  fallbackMessage: string,
+  setSlice: (state: AsyncSlice<T>) => void
+): Promise<void> {
+  try {
+    const result = await postJson<Record<string, unknown>>(url, repositoryUrl);
+    const data = extractData(result.body);
+    if (!result.ok || data === undefined) {
+      const error = result.body.error;
+      setSlice({
+        status: "error",
+        message: typeof error === "string" ? error : fallbackMessage,
+        httpStatus: result.status,
+      });
+      return;
+    }
+    setSlice({ status: "success", data });
+  } catch {
+    setSlice({ status: "error", message: "Could not reach the server." });
+  }
 }
 
 /**
@@ -145,52 +169,22 @@ export function useRepositoryAnalysis() {
     })();
 
     // Top risky files — independent, doesn't wait for or block core.
-    (async () => {
-      try {
-        const result = await postJson<TopRiskyFilesResponseBody>(
-          "/api/top-risky-files",
-          repositoryUrl
-        );
-        if (!result.ok || !result.body.files) {
-          setTopRiskyFiles({
-            status: "error",
-            message: result.body.error ?? "Couldn't rank risky files.",
-            httpStatus: result.status,
-          });
-          return;
-        }
-        setTopRiskyFiles({ status: "success", data: result.body.files });
-      } catch {
-        setTopRiskyFiles({
-          status: "error",
-          message: "Could not reach the server.",
-        });
-      }
-    })();
+    void loadAsyncSlice<FileRiskEntry[]>(
+      "/api/top-risky-files",
+      repositoryUrl,
+      (body) => body.files as FileRiskEntry[] | undefined,
+      "Couldn't rank risky files.",
+      setTopRiskyFiles
+    );
 
     // AI insights — independent, doesn't wait for or block core or files.
-    (async () => {
-      try {
-        const result = await postJson<ExplainResponseBody>(
-          "/api/explain",
-          repositoryUrl
-        );
-        if (!result.ok || !result.body.insights) {
-          setAiInsights({
-            status: "error",
-            message: result.body.error ?? "Couldn't generate AI insights.",
-            httpStatus: result.status,
-          });
-          return;
-        }
-        setAiInsights({ status: "success", data: result.body.insights });
-      } catch {
-        setAiInsights({
-          status: "error",
-          message: "Could not reach the server.",
-        });
-      }
-    })();
+    void loadAsyncSlice<AIExplanationOutput>(
+      "/api/explain",
+      repositoryUrl,
+      (body) => body.insights as AIExplanationOutput | undefined,
+      "Couldn't generate AI insights.",
+      setAiInsights
+    );
   }, []);
 
   const reset = useCallback(() => {

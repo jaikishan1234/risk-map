@@ -39,7 +39,7 @@ function InlineMarkdown({ text }: { text: string }) {
 export function AIInsightsCard({ data }: AIInsightsCardProps) {
   return (
     <Card className="border-border bg-card shadow-sm">
-      <CardHeader className="flex-row items-center gap-2 space-y-0">
+      <CardHeader className="flex-row items-center gap-2 space-y-0 border-b border-border pb-4">
         <Sparkles className="size-4 text-primary" aria-hidden="true" />
         <CardTitle className="text-sm font-medium">AI Insights</CardTitle>
         <span className="ml-auto font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
@@ -47,7 +47,7 @@ export function AIInsightsCard({ data }: AIInsightsCardProps) {
         </span>
       </CardHeader>
 
-      <CardContent className="space-y-6">
+      <CardContent className="space-y-6 pt-5">
         {/* Summary */}
         <div className="prose-sm text-sm leading-relaxed text-foreground [&_p]:m-0">
           <ReactMarkdown>{data.repositorySummary}</ReactMarkdown>
@@ -59,10 +59,10 @@ export function AIInsightsCard({ data }: AIInsightsCardProps) {
             Top Risks
           </h4>
           <ul className="space-y-2">
-            {data.topRisks.map((risk, index) => (
+            {data.topRisks.map((risk) => (
               <li
-                key={index}
-                className="flex items-start gap-2 rounded-lg border border-border/80 bg-destructive/5 p-2.5 text-sm text-foreground"
+                key={risk}
+                className="flex items-start gap-2 rounded-lg border border-border/80 bg-destructive/5 p-2.5 text-sm text-foreground transition-colors hover:border-destructive/30"
               >
                 <AlertTriangle
                   className="mt-0.5 size-3.5 shrink-0 text-destructive"
@@ -82,10 +82,10 @@ export function AIInsightsCard({ data }: AIInsightsCardProps) {
             Recommendations
           </h4>
           <ul className="space-y-2">
-            {data.recommendations.map((recommendation, index) => (
+            {data.recommendations.map((recommendation) => (
               <li
-                key={index}
-                className="flex items-start gap-2 rounded-lg border border-border/80 bg-emerald-500/5 p-2.5 text-sm text-foreground"
+                key={recommendation}
+                className="flex items-start gap-2 rounded-lg border border-border/80 bg-emerald-500/5 p-2.5 text-sm text-foreground transition-colors hover:border-emerald-500/30"
               >
                 <Lightbulb
                   className="mt-0.5 size-3.5 shrink-0 text-emerald-600"

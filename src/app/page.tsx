@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, Suspense } from "react";
+import { useCallback, useEffect, useRef, useState, Suspense, type ReactNode } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useForm } from "react-hook-form";
 import {
@@ -27,6 +27,7 @@ import {
   type CoreAnalysisState,
 } from "@/hooks/useRepositoryAnalysis";
 import { formatCompactNumber, formatRelativeDate } from "@/utils/format";
+import type { RepositoryMetadata } from "@/types/repository.types";
 import { ContributorsCard } from "@/components/repository/ContributorsCard";
 import { RiskDashboard } from "@/components/repository/RiskDashboard";
 import { TopRiskyFilesTable } from "@/components/repository/TopRiskyFilesTable";
@@ -308,7 +309,7 @@ function HomeContent() {
             {/* Top Risky Files — loads independently of the core analysis above. */}
             <ErrorBoundary sectionName="top risky files">
               <Card className="border-border bg-card shadow-sm">
-                <CardHeader className="flex-row items-center gap-2 space-y-0">
+                <CardHeader className="flex-row items-center gap-2 space-y-0 border-b border-border pb-4">
                   <ListTree className="size-4 text-primary" aria-hidden="true" />
                   <CardTitle className="text-sm font-medium">
                     Top Risky Files
@@ -317,7 +318,7 @@ function HomeContent() {
                     sampled from largest code files
                   </span>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="pt-5">
                   {topRiskyFiles.status === "loading" && <TopRiskyFilesTableSkeleton />}
                   {topRiskyFiles.status === "error" && (
                     <ErrorMessageCard
@@ -380,7 +381,8 @@ function CopyLinkButton() {
     <button
       type="button"
       onClick={handleCopy}
-      className="flex items-center gap-1 rounded-full border border-border bg-background/70 px-2 py-1 font-mono text-[10px] text-muted-foreground transition-colors hover:text-foreground"
+      aria-label={copied ? "Link copied" : "Copy link to this analysis"}
+      className="flex items-center gap-1 rounded-full border border-border bg-background/70 px-2 py-1 font-mono text-[10px] text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       {copied ? (
         <>
@@ -402,7 +404,8 @@ function NewAnalysisButton({ onReset }: { onReset: () => void }) {
     <button
       type="button"
       onClick={onReset}
-      className="flex items-center gap-1 rounded-full border border-border bg-background/70 px-2 py-1 font-mono text-[10px] text-muted-foreground transition-colors hover:text-foreground"
+      aria-label="Start a new analysis"
+      className="flex items-center gap-1 rounded-full border border-border bg-background/70 px-2 py-1 font-mono text-[10px] text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       <RotateCcw className="size-3" aria-hidden="true" />
       <span className="hidden sm:inline">NEW ANALYSIS</span>
@@ -453,7 +456,7 @@ function IdlePreview() {
 function RepositoryPreview({
   repository,
 }: {
-  repository: import("@/types/repository.types").RepositoryMetadata;
+  repository: RepositoryMetadata;
 }) {
   return (
     <div className="space-y-5">
@@ -497,7 +500,7 @@ function StatBox({
   label,
   value,
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   label: string;
   value: string;
 }) {

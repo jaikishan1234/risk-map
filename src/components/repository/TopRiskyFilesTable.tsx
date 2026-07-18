@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, ArrowUpDown, ChevronRight } from "lucide-react";
 
 import {
@@ -87,11 +87,20 @@ export function TopRiskyFilesTable({ files, repositoryUrl }: TopRiskyFilesTableP
           <TableRow className="hover:bg-transparent">
             <TableHead className="w-6" />
             {COLUMNS.map((column) => (
-              <TableHead key={column.key}>
+              <TableHead
+                key={column.key}
+                aria-sort={
+                  sortKey === column.key
+                    ? sortDirection === "asc"
+                      ? "ascending"
+                      : "descending"
+                    : "none"
+                }
+              >
                 <button
                   type="button"
                   onClick={() => handleSort(column.key)}
-                  className="flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground"
+                  className="flex items-center gap-1.5 rounded font-mono text-[11px] uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {column.label}
                   {sortKey === column.key ? (
@@ -117,9 +126,8 @@ export function TopRiskyFilesTable({ files, repositoryUrl }: TopRiskyFilesTableP
             const isExpanded = expandedPath === file.path;
             const detailsId = `file-details-${slugifyPath(file.path)}`;
             return (
-              <>
+              <Fragment key={file.path}>
                 <TableRow
-                  key={file.path}
                   onClick={() => toggleExpanded(file.path)}
                   className="cursor-pointer"
                 >
@@ -139,7 +147,7 @@ export function TopRiskyFilesTable({ files, repositoryUrl }: TopRiskyFilesTableP
                       className="rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       <ChevronRight
-                        className={`size-3.5 transition-transform ${
+                        className={`size-3.5 transition-transform duration-200 ${
                           isExpanded ? "rotate-90" : ""
                         }`}
                         aria-hidden="true"
@@ -171,17 +179,15 @@ export function TopRiskyFilesTable({ files, repositoryUrl }: TopRiskyFilesTableP
                   </TableCell>
                 </TableRow>
                 {isExpanded && (
-                  <TableRow
-                    key={`${file.path}-details`}
-                    id={detailsId}
-                    className="hover:bg-transparent"
-                  >
+                  <TableRow id={detailsId} className="hover:bg-transparent">
                     <TableCell colSpan={5} className="bg-muted/20 p-0">
-                      <FileDetailsPanel repositoryUrl={repositoryUrl} path={file.path} />
+                      <div className="animate-in fade-in slide-in-from-top-1 duration-200">
+                        <FileDetailsPanel repositoryUrl={repositoryUrl} path={file.path} />
+                      </div>
                     </TableCell>
                   </TableRow>
                 )}
-              </>
+              </Fragment>
             );
           })}
         </TableBody>
