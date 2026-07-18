@@ -165,7 +165,7 @@ export function RiskDashboard({ data }: RiskDashboardProps) {
                       ))}
                     </Pie>
                     <Tooltip
-                      formatter={(value: number) => [`${value}%`, "commit share"]}
+                      formatter={(value) => [`${value}%`, "commit share"]}
                       contentStyle={{
                         fontSize: 12,
                         fontFamily: "var(--font-mono, monospace)",
@@ -207,7 +207,7 @@ export function RiskDashboard({ data }: RiskDashboardProps) {
                     tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
                   />
                   <Tooltip
-                    formatter={(value: number) => [`${value}/100`, "risk"]}
+                    formatter={(value) => [`${value}/100`, "risk"]}
                     contentStyle={{
                       fontSize: 12,
                       fontFamily: "var(--font-mono, monospace)",

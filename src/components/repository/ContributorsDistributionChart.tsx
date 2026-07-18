@@ -109,7 +109,7 @@ export function ContributorsDistributionChart({
               <XAxis type="number" domain={[0, 100]} hide />
               <YAxis type="category" dataKey="name" hide />
               <Tooltip
-                formatter={(value: number, name: string) => [`${value}%`, name]}
+                formatter={(value, name) => [`${value}%`, name]}
                 contentStyle={{
                   fontSize: 12,
                   fontFamily: "var(--font-mono, monospace)",
