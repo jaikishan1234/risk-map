@@ -59,11 +59,14 @@ export function AIInsightsCard({ data }: AIInsightsCardProps) {
             Top Risks
           </h4>
           <ul className="space-y-2">
-            {data.topRisks.map((risk) => (
+            {data.topRisks.map((risk, index) => (
               <li
                 key={risk}
-                className="flex items-start gap-2 rounded-lg border border-border/80 bg-destructive/5 p-2.5 text-sm text-foreground transition-colors hover:border-destructive/30"
+                className="flex items-start gap-2.5 rounded-lg border border-border/80 bg-destructive/5 p-2.5 text-sm text-foreground transition-colors hover:border-destructive/30"
               >
+                <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full bg-destructive/15 font-mono text-[10px] font-semibold text-destructive">
+                  {index + 1}
+                </span>
                 <AlertTriangle
                   className="mt-0.5 size-3.5 shrink-0 text-destructive"
                   aria-hidden="true"
@@ -82,11 +85,14 @@ export function AIInsightsCard({ data }: AIInsightsCardProps) {
             Recommendations
           </h4>
           <ul className="space-y-2">
-            {data.recommendations.map((recommendation) => (
+            {data.recommendations.map((recommendation, index) => (
               <li
                 key={recommendation}
-                className="flex items-start gap-2 rounded-lg border border-border/80 bg-emerald-500/5 p-2.5 text-sm text-foreground transition-colors hover:border-emerald-500/30"
+                className="flex items-start gap-2.5 rounded-lg border border-border/80 bg-emerald-500/5 p-2.5 text-sm text-foreground transition-colors hover:border-emerald-500/30"
               >
+                <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 font-mono text-[10px] font-semibold text-emerald-600">
+                  {index + 1}
+                </span>
                 <Lightbulb
                   className="mt-0.5 size-3.5 shrink-0 text-emerald-600"
                   aria-hidden="true"

@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import {
   Bar,
   BarChart,
@@ -24,27 +25,41 @@ interface RiskDashboardProps {
   data: RiskDashboardData;
 }
 
+// Below this many total commits, scores are still computed the same way,
+// but with so little history the confidence behind them is genuinely
+// lower — worth telling the reader that rather than presenting a 3-commit
+// repo's score with the same implied confidence as a 10,000-commit one.
+const LOW_COMMIT_CONFIDENCE_THRESHOLD = 20;
+
 export function RiskDashboard({ data }: RiskDashboardProps) {
   const documentationScore = Math.round((100 - data.documentationRisk) * 10) / 10;
 
-  const topContributors = data.contributors.slice(0, 6);
-  const othersPercentage = data.contributors
-    .slice(6)
-    .reduce((sum, c) => sum + c.percentage, 0);
+  const pieData = useMemo(() => {
+    const topContributors = data.contributors.slice(0, 6);
+    const othersPercentage = data.contributors
+      .slice(6)
+      .reduce((sum, c) => sum + c.percentage, 0);
 
-  const pieData = [
-    ...topContributors.map((c) => ({ name: c.author, value: c.percentage })),
-    ...(othersPercentage > 0
-      ? [{ name: "Others", value: Math.round(othersPercentage * 10) / 10 }]
-      : []),
-  ];
+    return [
+      ...topContributors.map((c) => ({ name: c.author, value: c.percentage })),
+      ...(othersPercentage > 0
+        ? [{ name: "Others", value: Math.round(othersPercentage * 10) / 10 }]
+        : []),
+    ];
+  }, [data.contributors]);
 
-  const breakdownData = [
-    { label: "Bus Factor", value: data.breakdown.busFactorRisk },
-    { label: "Concentration", value: data.breakdown.concentrationScore },
-    { label: "Recency", value: data.breakdown.recencyRisk },
-    { label: "Documentation", value: data.breakdown.documentationRisk },
-  ];
+  const breakdownData = useMemo(
+    () => [
+      { label: "Bus Factor", value: data.breakdown.busFactorRisk },
+      { label: "Concentration", value: data.breakdown.concentrationScore },
+      { label: "Recency", value: data.breakdown.recencyRisk },
+      { label: "Documentation", value: data.breakdown.documentationRisk },
+    ],
+    [data.breakdown]
+  );
+
+  const hasLowCommitConfidence =
+    data.totalCommits > 0 && data.totalCommits < LOW_COMMIT_CONFIDENCE_THRESHOLD;
 
   return (
     <div className="space-y-4">
@@ -59,9 +74,21 @@ export function RiskDashboard({ data }: RiskDashboardProps) {
         </div>
       )}
 
+      {hasLowCommitConfidence && (
+        <div className="flex items-start gap-2 rounded-xl border border-border bg-muted/40 p-3 font-mono text-xs text-muted-foreground">
+          <TriangleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+          <span>
+            Only {data.totalCommits} commits were found — scores below are
+            computed the same way regardless of history length, but with
+            this little data they carry less statistical confidence than
+            on an actively-developed repository.
+          </span>
+        </div>
+      )}
+
       {/* Stat cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="border-border bg-card shadow-sm">
+        <Card className="border-border bg-card shadow-sm transition-shadow hover:shadow-md">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
               <Gauge className="size-3.5" aria-hidden="true" />
@@ -73,7 +100,7 @@ export function RiskDashboard({ data }: RiskDashboardProps) {
           </CardContent>
         </Card>
 
-        <Card className="border-border bg-card shadow-sm">
+        <Card className="border-border bg-card shadow-sm transition-shadow hover:shadow-md">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
               <Users className="size-3.5" aria-hidden="true" />
@@ -90,7 +117,7 @@ export function RiskDashboard({ data }: RiskDashboardProps) {
           </CardContent>
         </Card>
 
-        <Card className="border-border bg-card shadow-sm">
+        <Card className="border-border bg-card shadow-sm transition-shadow hover:shadow-md">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
               <GitFork className="size-3.5" aria-hidden="true" />
@@ -107,7 +134,7 @@ export function RiskDashboard({ data }: RiskDashboardProps) {
           </CardContent>
         </Card>
 
-        <Card className="border-border bg-card shadow-sm">
+        <Card className="border-border bg-card shadow-sm transition-shadow hover:shadow-md">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
               <FileText className="size-3.5" aria-hidden="true" />
@@ -128,7 +155,7 @@ export function RiskDashboard({ data }: RiskDashboardProps) {
 
       {/* Charts */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Card className="border-border bg-card shadow-sm">
+        <Card className="border-border bg-card shadow-sm transition-shadow hover:shadow-md">
           <CardHeader>
             <CardTitle className="text-sm font-medium">
               Commit Share by Contributor
@@ -184,7 +211,7 @@ export function RiskDashboard({ data }: RiskDashboardProps) {
           </CardContent>
         </Card>
 
-        <Card className="border-border bg-card shadow-sm">
+        <Card className="border-border bg-card shadow-sm transition-shadow hover:shadow-md">
           <CardHeader>
             <CardTitle className="text-sm font-medium">
               Risk Score Breakdown
@@ -193,12 +220,19 @@ export function RiskDashboard({ data }: RiskDashboardProps) {
           <CardContent>
             <div className="h-64 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={breakdownData} layout="vertical" margin={{ left: 8 }}>
+                <BarChart data={breakdownData} layout="vertical" margin={{ left: 8, bottom: 20 }}>
                   <CartesianGrid horizontal={false} stroke="var(--border)" />
                   <XAxis
                     type="number"
                     domain={[0, 100]}
                     tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+                    label={{
+                      value: "Risk contribution (0 = none, 100 = max)",
+                      position: "insideBottom",
+                      offset: -12,
+                      fontSize: 10,
+                      fill: "var(--muted-foreground)",
+                    }}
                   />
                   <YAxis
                     type="category"

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, Suspense, type ReactNode } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import dynamic from "next/dynamic";
 import { useForm } from "react-hook-form";
 import {
   ArrowRight,
@@ -29,8 +30,8 @@ import {
 import { formatCompactNumber, formatRelativeDate } from "@/utils/format";
 import type { RepositoryMetadata } from "@/types/repository.types";
 import { ContributorsCard } from "@/components/repository/ContributorsCard";
-import { RiskDashboard } from "@/components/repository/RiskDashboard";
 import { TopRiskyFilesTable } from "@/components/repository/TopRiskyFilesTable";
+import { FeaturedRiskyFileCard } from "@/components/repository/FeaturedRiskyFileCard";
 import { AIInsightsCard } from "@/components/repository/AIInsightsCard";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -46,6 +47,19 @@ import {
 } from "@/components/repository/skeletons";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ListTree, Download } from "lucide-react";
+
+// Code-split RiskDashboard: it pulls in recharts (a large dependency)
+// that's only needed once analysis actually succeeds, not on first paint
+// of the landing page. ssr: false is safe here — it's already a "use
+// client" component with no SEO-relevant content (it only ever renders
+// after a client-side fetch completes).
+const RiskDashboard = dynamic(
+  () =>
+    import("@/components/repository/RiskDashboard").then(
+      (mod) => mod.RiskDashboard
+    ),
+  { ssr: false, loading: () => <RiskDashboardSkeleton /> }
+);
 
 export default function Home() {
   // useSearchParams requires a Suspense boundary around any component that
@@ -321,6 +335,10 @@ function HomeContent() {
 
             {/* Top Risky Files — loads independently of the core analysis above. */}
             <ErrorBoundary sectionName="top risky files">
+              {topRiskyFiles.status === "success" && topRiskyFiles.data.length > 0 && (
+                <FeaturedRiskyFileCard file={topRiskyFiles.data[0]} />
+              )}
+
               <Card className="border-border bg-card shadow-sm">
                 <CardHeader className="flex-row items-center gap-2 space-y-0 border-b border-border pb-4">
                   <ListTree className="size-4 text-primary" aria-hidden="true" />
@@ -384,6 +402,12 @@ function HomeContent() {
             </ErrorBoundary>
           </section>
         )}
+
+        <footer className="border-t border-border py-6 text-center">
+          <p className="font-mono text-xs text-muted-foreground">
+            Built for the OpenAI × NamasteDev Hackathon
+          </p>
+        </footer>
       </div>
     </main>
   );
